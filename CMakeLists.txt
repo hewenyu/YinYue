@@ -9,8 +9,8 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools Multimedia MultimediaWidgets Sql)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools Multimedia MultimediaWidgets Sql)
 
 set(TS_FILES YinYue_zh_CN.ts)
 
@@ -19,6 +19,12 @@ set(PROJECT_SOURCES
         mainwindow.cpp
         mainwindow.h
         mainwindow.ui
+        src/core/musicplayer.cpp
+        src/core/musicplayer.h
+        src/models/musicfile.cpp
+        src/models/musicfile.h
+        src/models/playlist.cpp
+        src/models/playlist.h
         ${TS_FILES}
 )
 
@@ -49,7 +55,11 @@ else()
     qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
 endif()
 
-target_link_libraries(YinYue PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+target_link_libraries(YinYue PRIVATE 
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Multimedia
+    Qt${QT_VERSION_MAJOR}::MultimediaWidgets
+)
 
 set_target_properties(YinYue PROPERTIES
     MACOSX_BUNDLE_GUI_IDENTIFIER my.example.com
