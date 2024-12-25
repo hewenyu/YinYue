@@ -113,12 +113,15 @@ bool Lyric::isEmpty() const
 
 bool Lyric::parseLRC(const QString &content)
 {
-    // 修改时间标签正则表达式以匹配更多格式
-    QRegularExpression timeRegex("\\[(\\d{2}):(\\d{2})[.](\\d{1,2})\\]");
-    QRegularExpression metaRegex("\\[([^:]+):([^\\]]+)\\]");
+    // 支持更多时间标签格式，包括可选的毫秒部分
+    QRegularExpression timeRegex("\\[(\\d{2}):(\\d{2})(?:[.:](\\d{1,3}))?\\]");
+    // 修改元数据标签的正则表达式，使其更具体
+    QRegularExpression metaRegex("\\[([a-zA-Z]+):([^\\]]+)\\]");
     
     const QStringList lines = content.split('\n');
     qDebug() << "开始解析歌词，共" << lines.size() << "行";
+    
+    bool hasValidLyric = false;
     
     for (const QString &line : lines) {
         QString trimmedLine = line.trimmed();
@@ -126,21 +129,22 @@ bool Lyric::parseLRC(const QString &content)
             continue;
         }
         
+        qDebug() << "处理行:" << trimmedLine;
+        
         // 解析元数据标签
         auto metaMatch = metaRegex.match(trimmedLine);
         if (metaMatch.hasMatch()) {
-            QString key = metaMatch.captured(1).toLower();
+            QString key = metaMatch.captured(1).toLower().trimmed();
             QString value = metaMatch.captured(2).trimmed();
             
-            if (key == "ti") {
+            qDebug() << "找到元数据标签:" << key << "=" << value;
+            
+            if (key == "ti" || key == "title") {
                 m_title = value;
-                qDebug() << "歌曲标题:" << value;
-            } else if (key == "ar") {
+            } else if (key == "ar" || key == "artist") {
                 m_artist = value;
-                qDebug() << "艺术家:" << value;
-            } else if (key == "al") {
+            } else if (key == "al" || key == "album") {
                 m_album = value;
-                qDebug() << "专辑:" << value;
             }
             continue;
         }
@@ -148,19 +152,22 @@ bool Lyric::parseLRC(const QString &content)
         // 解析时间标签
         auto timeMatchIt = timeRegex.globalMatch(trimmedLine);
         if (!timeMatchIt.hasNext()) {
-            qDebug() << "忽略无时间标签的行:" << trimmedLine;
+            qDebug() << "未找到时间标签，跳过行:" << trimmedLine;
             continue;
         }
         
         // 获取歌词文本（移除所有时间标签后的内容）
         QString lyricText = trimmedLine;
-        QRegularExpression allTimeTagsRegex("\\[\\d{2}:\\d{2}[.]\\d{1,2}\\]");
+        QRegularExpression allTimeTagsRegex("\\[\\d{2}:\\d{2}(?:[.:]\\d{1,3})?\\]");
         lyricText.remove(allTimeTagsRegex);
         lyricText = lyricText.trimmed();
         
         if (lyricText.isEmpty()) {
+            qDebug() << "移除时间标签后歌词为空，跳过";
             continue;
         }
+        
+        qDebug() << "提取到歌词文本:" << lyricText;
         
         // 重新匹配所有时间标签
         timeMatchIt = timeRegex.globalMatch(trimmedLine);
@@ -168,23 +175,36 @@ bool Lyric::parseLRC(const QString &content)
             auto match = timeMatchIt.next();
             int minutes = match.captured(1).toInt();
             int seconds = match.captured(2).toInt();
-            int milliseconds = match.captured(3).toInt();
+            int milliseconds = 0;
             
-            // 处理毫秒部分，确保转换为3位数的毫秒值
-            if (milliseconds < 10) {
-                milliseconds *= 100;
-            } else if (milliseconds < 100) {
-                milliseconds *= 10;
+            if (match.lastCapturedIndex() >= 3 && !match.captured(3).isEmpty()) {
+                milliseconds = match.captured(3).toInt();
+                // 根据毫秒部分的位数进行调整
+                if (milliseconds < 10) {
+                    milliseconds *= 100;
+                } else if (milliseconds < 100) {
+                    milliseconds *= 10;
+                }
             }
             
             qint64 timestamp = (minutes * 60 + seconds) * 1000 + milliseconds;
             
             m_lyrics[timestamp] = lyricText;
-            qDebug() << "添加歌词:" << timestamp << lyricText;
+            qDebug() << "添加歌词 -" << "时间:" << timestamp 
+                     << "(" << minutes << ":" << seconds << "." << milliseconds << ")"
+                     << "文本:" << lyricText;
+            
+            hasValidLyric = true;
         }
     }
     
-    return !m_lyrics.isEmpty();
+    if (hasValidLyric) {
+        qDebug() << "歌词解析成功，共" << m_lyrics.size() << "条歌词";
+    } else {
+        qDebug() << "未找到任何有效歌词";
+    }
+    
+    return hasValidLyric;
 }
 
 qint64 Lyric::parseTimeTag(const QString &tag) const
