@@ -85,7 +85,7 @@ void MainWindow::refreshMusicLibrary()
     dir.setFilter(QDir::Files | QDir::NoDotAndDotDot | QDir::Readable);
     QFileInfoList fileList = dir.entryInfoList();
     
-    // 更新音乐库
+    // ��新音乐库
     for (const QFileInfo &fileInfo : fileList) {
         QString filePath = fileInfo.absoluteFilePath();
         if (!m_musicLibrary.contains(filePath)) {
@@ -125,7 +125,7 @@ void MainWindow::loadFolder(const QString &folderPath)
     // 更新当前音乐文件夹
     m_currentMusicFolder = folderPath;
     
-    // 设置文件监控
+    // 设置文��监控
     if (!m_fileWatcher->directories().isEmpty()) {
         m_fileWatcher->removePaths(m_fileWatcher->directories());
     }
@@ -178,13 +178,40 @@ void MainWindow::addToPlaylist(const MusicFile &file)
     }
     QListWidgetItem *item = new QListWidgetItem(displayText, ui->playlistWidget);
     item->setToolTip(file.filePath());
+    
+    // 如果是第一首添加的歌曲，自动选中
+    if (ui->playlistWidget->count() == 1) {
+        ui->playlistWidget->setCurrentItem(item);
+        m_playlist->setCurrentIndex(0);
+        updateCurrentSong(file);
+    }
 }
 
 void MainWindow::updateCurrentSong(const MusicFile &file)
 {
-    ui->titleLabel->setText(file.title());
-    ui->artistLabel->setText(file.artist());
-    // TODO: 更新封面显示
+    // 更新标题和艺术家信息
+    QString title = file.title();
+    QString artist = file.artist();
+    
+    ui->titleLabel->setText(title.isEmpty() ? tr("未知歌曲") : title);
+    ui->artistLabel->setText(artist.isEmpty() ? tr("未知艺术家") : artist);
+    
+    // 更新窗口标题
+    setWindowTitle(QString("%1 - %2").arg(title).arg(artist));
+    
+    // 高亮显示当前播放的歌曲
+    for (int i = 0; i < ui->playlistWidget->count(); ++i) {
+        QListWidgetItem *item = ui->playlistWidget->item(i);
+        QFont font = item->font();
+        if (item->toolTip() == file.filePath()) {
+            font.setBold(true);
+            item->setFont(font);
+            ui->playlistWidget->setCurrentItem(item);
+        } else {
+            font.setBold(false);
+            item->setFont(font);
+        }
+    }
 }
 
 void MainWindow::on_libraryWidget_doubleClicked(const QModelIndex &index)
@@ -241,8 +268,15 @@ void MainWindow::on_playButton_clicked()
         m_player->pause();
     } else {
         if (m_playlist->currentIndex() == -1 && m_playlist->count() > 0) {
+            // 如果没有选中的歌曲但播放列表不为空，播放第一首
             m_playlist->setCurrentIndex(0);
-            m_player->setSource(m_playlist->at(0).fileUrl());
+            MusicFile currentFile = m_playlist->at(0);
+            updateCurrentSong(currentFile);
+            m_player->setSource(currentFile.fileUrl());
+        } else if (m_playlist->currentIndex() >= 0) {
+            // 如果有选中的歌曲，更新当前歌曲信息
+            MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
+            updateCurrentSong(currentFile);
         }
         m_player->play();
     }
@@ -253,7 +287,9 @@ void MainWindow::on_previousButton_clicked()
     int prevIndex = m_playlist->previousIndex();
     if (prevIndex != -1) {
         m_playlist->setCurrentIndex(prevIndex);
-        m_player->setSource(m_playlist->at(prevIndex).fileUrl());
+        MusicFile currentFile = m_playlist->at(prevIndex);
+        updateCurrentSong(currentFile);
+        m_player->setSource(currentFile.fileUrl());
         m_player->play();
     }
 }
@@ -263,7 +299,9 @@ void MainWindow::on_nextButton_clicked()
     int nextIndex = m_playlist->nextIndex();
     if (nextIndex != -1) {
         m_playlist->setCurrentIndex(nextIndex);
-        m_player->setSource(m_playlist->at(nextIndex).fileUrl());
+        MusicFile currentFile = m_playlist->at(nextIndex);
+        updateCurrentSong(currentFile);
+        m_player->setSource(currentFile.fileUrl());
         m_player->play();
     }
 }
