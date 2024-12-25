@@ -7,6 +7,7 @@
 #include <QStandardPaths>
 #include <QProgressDialog>
 #include <QDebug>
+#include <QSettings>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -28,10 +29,15 @@ MainWindow::MainWindow(QWidget *parent)
     QFont lyricFont = ui->lyricEdit->font();
     lyricFont.setPointSize(12);
     ui->lyricEdit->setFont(lyricFont);
+    
+    // 加载配置
+    loadSettings();
 }
 
 MainWindow::~MainWindow()
 {
+    // 保存配置
+    saveSettings();
     delete ui;
 }
 
@@ -316,7 +322,7 @@ void MainWindow::updateLyric(qint64 position)
         QString nextLyric1 = m_lyric->getLyricText(nextTime1);
         QString nextLyric2 = m_lyric->getLyricText(nextTime2);
         
-        // 获取基础字体大小
+        // 获取基础字体���小
         int baseFontSize = ui->lyricEdit->font().pointSize();
         
         // 构建显示文本，使用相对字体大小
@@ -554,5 +560,81 @@ void MainWindow::adjustLyricFontSize()
     
     // 更新歌词显示
     updateLyric(m_player->position());
+}
+
+void MainWindow::loadSettings()
+{
+    QSettings settings("YinYue", "MusicPlayer");
+    
+    // 加载音乐文件夹路径
+    QString musicFolder = settings.value("musicFolder").toString();
+    if (!musicFolder.isEmpty() && QDir(musicFolder).exists()) {
+        loadFolder(musicFolder);
+    }
+    
+    // 加载播放列表
+    int size = settings.beginReadArray("playlist");
+    for (int i = 0; i < size; ++i) {
+        settings.setArrayIndex(i);
+        QString filePath = settings.value("filePath").toString();
+        if (QFile::exists(filePath)) {
+            MusicFile musicFile(filePath);
+            addToPlaylist(musicFile);
+        }
+    }
+    settings.endArray();
+    
+    // 加载音量
+    int volume = settings.value("volume", 50).toInt();
+    ui->volumeSlider->setValue(volume);
+    m_player->setVolume(volume);
+    
+    // 加载上次播放的歌曲索引和位置
+    int lastIndex = settings.value("currentIndex", -1).toInt();
+    qint64 lastPosition = settings.value("position", 0).toLongLong();
+    bool wasPlaying = settings.value("isPlaying", false).toBool();
+    
+    if (lastIndex >= 0 && lastIndex < m_playlist->count()) {
+        m_playlist->setCurrentIndex(lastIndex);
+        MusicFile currentFile = m_playlist->at(lastIndex);
+        updateCurrentSong(currentFile);
+        
+        // 设置音乐源并恢复位置
+        m_player->setSource(currentFile.fileUrl());
+        m_player->setPosition(lastPosition);
+        
+        // 如果之前在播放，则自动开始播放
+        if (wasPlaying) {
+            m_player->play();
+        }
+    }
+}
+
+void MainWindow::saveSettings()
+{
+    QSettings settings("YinYue", "MusicPlayer");
+    
+    // 保存音乐文件夹路径
+    if (!m_currentMusicFolder.isEmpty()) {
+        settings.setValue("musicFolder", m_currentMusicFolder);
+    }
+    
+    // 保存播放列表
+    settings.beginWriteArray("playlist");
+    for (int i = 0; i < m_playlist->count(); ++i) {
+        settings.setArrayIndex(i);
+        settings.setValue("filePath", m_playlist->at(i).filePath());
+    }
+    settings.endArray();
+    
+    // 保存音量
+    settings.setValue("volume", m_player->volume());
+    
+    // 保存当前播放的歌曲索引、位置和状态
+    settings.setValue("currentIndex", m_playlist->currentIndex());
+    settings.setValue("position", m_player->position());
+    settings.setValue("isPlaying", m_isPlaying);
+    
+    settings.sync();
 }
 

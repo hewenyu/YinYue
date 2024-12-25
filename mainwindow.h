@@ -66,6 +66,8 @@ private:
     void updateCurrentSong(const MusicFile &file);
     void loadLyric(const QString &musicFilePath);
     void adjustLyricFontSize();
+    void loadSettings();
+    void saveSettings();
 
 private:
     Ui::MainWindow *ui;
