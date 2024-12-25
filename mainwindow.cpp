@@ -66,8 +66,10 @@ void MainWindow::setupConnections()
     // 设置一个合适的字体
     QFont lyricFont = ui->lyricEdit->font();
     lyricFont.setFamily("Microsoft YaHei");
-    lyricFont.setPointSize(16);
     ui->lyricEdit->setFont(lyricFont);
+    
+    // 初始调整字体大小
+    adjustLyricFontSize();
 }
 
 void MainWindow::onDirectoryChanged(const QString &path)
@@ -314,26 +316,44 @@ void MainWindow::updateLyric(qint64 position)
         QString nextLyric1 = m_lyric->getLyricText(nextTime1);
         QString nextLyric2 = m_lyric->getLyricText(nextTime2);
         
-        // 构建显示文本，使用更大的字体和更好的间距
+        // 获取基础字体大小
+        int baseFontSize = ui->lyricEdit->font().pointSize();
+        
+        // 构建显示文本，使用相对字体大小
         QString displayText;
         
         // 前两行歌词（较暗）
         if (!prevLyric1.isEmpty() && prevLyric1 != prevLyric2) {
-            displayText += QString("<p style='margin: 15px; color: #BBBBBB; font-size: 16px;'>%1</p>").arg(prevLyric1);
+            displayText += QString("<p style='margin: %1px; color: #BBBBBB; font-size: %2px;'>%3</p>")
+                .arg(baseFontSize * 0.6)
+                .arg(baseFontSize * 0.8)
+                .arg(prevLyric1);
         }
         if (!prevLyric2.isEmpty() && prevLyric2 != currentLyric) {
-            displayText += QString("<p style='margin: 15px; color: #999999; font-size: 18px;'>%1</p>").arg(prevLyric2);
+            displayText += QString("<p style='margin: %1px; color: #999999; font-size: %2px;'>%3</p>")
+                .arg(baseFontSize * 0.6)
+                .arg(baseFontSize * 0.9)
+                .arg(prevLyric2);
         }
         
         // 当前歌词（大号加粗）
-        displayText += QString("<p style='margin: 25px; color: #333333; font-size: 24px; font-weight: bold;'>%1</p>").arg(currentLyric);
+        displayText += QString("<p style='margin: %1px; color: #333333; font-size: %2px; font-weight: bold;'>%3</p>")
+            .arg(baseFontSize)
+            .arg(baseFontSize * 1.5)
+            .arg(currentLyric);
         
         // 后两行歌词（较暗）
         if (!nextLyric1.isEmpty() && nextLyric1 != currentLyric) {
-            displayText += QString("<p style='margin: 15px; color: #999999; font-size: 18px;'>%1</p>").arg(nextLyric1);
+            displayText += QString("<p style='margin: %1px; color: #999999; font-size: %2px;'>%3</p>")
+                .arg(baseFontSize * 0.6)
+                .arg(baseFontSize * 0.9)
+                .arg(nextLyric1);
         }
         if (!nextLyric2.isEmpty() && nextLyric2 != nextLyric1) {
-            displayText += QString("<p style='margin: 15px; color: #BBBBBB; font-size: 16px;'>%1</p>").arg(nextLyric2);
+            displayText += QString("<p style='margin: %1px; color: #BBBBBB; font-size: %2px;'>%3</p>")
+                .arg(baseFontSize * 0.6)
+                .arg(baseFontSize * 0.8)
+                .arg(nextLyric2);
         }
         
         ui->lyricEdit->setHtml(displayText);
@@ -509,5 +529,30 @@ void MainWindow::updateTimeLabel(QLabel *label, qint64 time)
     label->setText(QString("%1:%2")
         .arg(minutes, 2, 10, QChar('0'))
         .arg(seconds, 2, 10, QChar('0')));
+}
+
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    adjustLyricFontSize();
+}
+
+void MainWindow::adjustLyricFontSize()
+{
+    // 获取歌词显示区域的大小
+    int width = ui->lyricEdit->width();
+    int height = ui->lyricEdit->height();
+    
+    // 根据窗口大小计算基础字体大小
+    int baseFontSize = qMin(width / 30, height / 15);
+    baseFontSize = qBound(12, baseFontSize, 32); // 限制字体大小范围
+    
+    // 更新字体大小
+    QFont lyricFont = ui->lyricEdit->font();
+    lyricFont.setPointSize(baseFontSize);
+    ui->lyricEdit->setFont(lyricFont);
+    
+    // 更新歌词显示
+    updateLyric(m_player->position());
 }
 

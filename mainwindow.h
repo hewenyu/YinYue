@@ -21,6 +21,9 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+protected:
+    void resizeEvent(QResizeEvent *event) override;
+
 private slots:
     // 播放控制
     void on_playButton_clicked();
@@ -62,6 +65,7 @@ private:
     void addToPlaylist(const MusicFile &file);
     void updateCurrentSong(const MusicFile &file);
     void loadLyric(const QString &musicFilePath);
+    void adjustLyricFontSize();
 
 private:
     Ui::MainWindow *ui;
