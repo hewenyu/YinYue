@@ -57,7 +57,7 @@ void MainWindow::setupConnections()
         "QTextEdit {"
         "   background-color: transparent;"
         "   border: none;"
-        "   padding: 20px;"
+        "   padding: 30px;"
         "}"
     );
     ui->lyricEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -66,7 +66,7 @@ void MainWindow::setupConnections()
     // 设置一个合适的字体
     QFont lyricFont = ui->lyricEdit->font();
     lyricFont.setFamily("Microsoft YaHei");
-    lyricFont.setPointSize(12);
+    lyricFont.setPointSize(16);
     ui->lyricEdit->setFont(lyricFont);
 }
 
@@ -304,20 +304,36 @@ void MainWindow::updateLyric(qint64 position)
     QString currentLyric = m_lyric->getLyricText(position);
     if (!currentLyric.isEmpty()) {
         // 获取当前歌词的前后歌词
-        qint64 prevTime = position - 5000; // 前5秒
-        qint64 nextTime = position + 5000; // 后5秒
+        qint64 prevTime1 = position - 10000; // 前10秒
+        qint64 prevTime2 = position - 5000;  // 前5秒
+        qint64 nextTime1 = position + 5000;  // 后5秒
+        qint64 nextTime2 = position + 10000; // 后10秒
         
-        QString prevLyric = m_lyric->getLyricText(prevTime);
-        QString nextLyric = m_lyric->getLyricText(nextTime);
+        QString prevLyric1 = m_lyric->getLyricText(prevTime1);
+        QString prevLyric2 = m_lyric->getLyricText(prevTime2);
+        QString nextLyric1 = m_lyric->getLyricText(nextTime1);
+        QString nextLyric2 = m_lyric->getLyricText(nextTime2);
         
         // 构建显示文本，使用更大的字体和更好的间距
         QString displayText;
-        if (!prevLyric.isEmpty() && prevLyric != currentLyric) {
-            displayText += QString("<p style='margin: 10px; color: #999999; font-size: 14px;'>%1</p>").arg(prevLyric);
+        
+        // 前两行歌词（较暗）
+        if (!prevLyric1.isEmpty() && prevLyric1 != prevLyric2) {
+            displayText += QString("<p style='margin: 15px; color: #BBBBBB; font-size: 16px;'>%1</p>").arg(prevLyric1);
         }
-        displayText += QString("<p style='margin: 20px; color: #333333; font-size: 18px; font-weight: bold;'>%1</p>").arg(currentLyric);
-        if (!nextLyric.isEmpty() && nextLyric != currentLyric) {
-            displayText += QString("<p style='margin: 10px; color: #999999; font-size: 14px;'>%1</p>").arg(nextLyric);
+        if (!prevLyric2.isEmpty() && prevLyric2 != currentLyric) {
+            displayText += QString("<p style='margin: 15px; color: #999999; font-size: 18px;'>%1</p>").arg(prevLyric2);
+        }
+        
+        // 当前歌词（大号加粗）
+        displayText += QString("<p style='margin: 25px; color: #333333; font-size: 24px; font-weight: bold;'>%1</p>").arg(currentLyric);
+        
+        // 后两行歌词（较暗）
+        if (!nextLyric1.isEmpty() && nextLyric1 != currentLyric) {
+            displayText += QString("<p style='margin: 15px; color: #999999; font-size: 18px;'>%1</p>").arg(nextLyric1);
+        }
+        if (!nextLyric2.isEmpty() && nextLyric2 != nextLyric1) {
+            displayText += QString("<p style='margin: 15px; color: #BBBBBB; font-size: 16px;'>%1</p>").arg(nextLyric2);
         }
         
         ui->lyricEdit->setHtml(displayText);
