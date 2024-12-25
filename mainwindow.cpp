@@ -51,6 +51,23 @@ void MainWindow::setupConnections()
     
     // 连接位置更新信号到歌词更新槽
     connect(m_player, &MusicPlayer::positionChanged, this, &MainWindow::updateLyric);
+    
+    // 设置歌词显示区域的样式
+    ui->lyricEdit->setStyleSheet(
+        "QTextEdit {"
+        "   background-color: transparent;"
+        "   border: none;"
+        "   padding: 20px;"
+        "}"
+    );
+    ui->lyricEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    ui->lyricEdit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    
+    // 设置一个合适的字体
+    QFont lyricFont = ui->lyricEdit->font();
+    lyricFont.setFamily("Microsoft YaHei");
+    lyricFont.setPointSize(12);
+    ui->lyricEdit->setFont(lyricFont);
 }
 
 void MainWindow::onDirectoryChanged(const QString &path)
@@ -293,14 +310,14 @@ void MainWindow::updateLyric(qint64 position)
         QString prevLyric = m_lyric->getLyricText(prevTime);
         QString nextLyric = m_lyric->getLyricText(nextTime);
         
-        // 构建显示文本
+        // 构建显示文本，使用更大的字体和更好的间距
         QString displayText;
         if (!prevLyric.isEmpty() && prevLyric != currentLyric) {
-            displayText += QString("<p style='color: #666666;'>%1</p>").arg(prevLyric);
+            displayText += QString("<p style='margin: 10px; color: #999999; font-size: 14px;'>%1</p>").arg(prevLyric);
         }
-        displayText += QString("<p style='color: #000000; font-weight: bold;'>%1</p>").arg(currentLyric);
+        displayText += QString("<p style='margin: 20px; color: #333333; font-size: 18px; font-weight: bold;'>%1</p>").arg(currentLyric);
         if (!nextLyric.isEmpty() && nextLyric != currentLyric) {
-            displayText += QString("<p style='color: #666666;'>%1</p>").arg(nextLyric);
+            displayText += QString("<p style='margin: 10px; color: #999999; font-size: 14px;'>%1</p>").arg(nextLyric);
         }
         
         ui->lyricEdit->setHtml(displayText);

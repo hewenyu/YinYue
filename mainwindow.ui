@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1000</width>
+    <width>800</width>
     <height>600</height>
    </rect>
   </property>
@@ -21,48 +21,21 @@
        <enum>Qt::Horizontal</enum>
       </property>
       <widget class="QWidget" name="leftWidget" native="true">
-       <layout class="QVBoxLayout" name="verticalLayout_3">
+       <layout class="QVBoxLayout" name="verticalLayout">
         <item>
-         <widget class="QLabel" name="libraryLabel">
-          <property name="text">
-           <string>音乐库</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QListWidget" name="libraryWidget">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
-            <horstretch>1</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-         </widget>
+         <widget class="QListWidget" name="libraryWidget"/>
         </item>
        </layout>
       </widget>
       <widget class="QWidget" name="centerWidget" native="true">
        <layout class="QVBoxLayout" name="verticalLayout_2">
         <item>
-         <widget class="QLabel" name="coverLabel">
+         <widget class="QTextEdit" name="lyricEdit">
           <property name="minimumSize">
            <size>
-            <width>300</width>
+            <width>400</width>
             <height>300</height>
            </size>
-          </property>
-          <property name="text">
-           <string/>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignCenter</set>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QTextEdit" name="lyricEdit">
-          <property name="minimumHeight">
-           <number>100</number>
           </property>
           <property name="readOnly">
            <bool>true</bool>
@@ -82,9 +55,6 @@
               <bold>true</bold>
              </font>
             </property>
-            <property name="text">
-             <string>未播放</string>
-            </property>
             <property name="alignment">
              <set>Qt::AlignCenter</set>
             </property>
@@ -92,9 +62,6 @@
           </item>
           <item>
            <widget class="QLabel" name="artistLabel">
-            <property name="text">
-             <string/>
-            </property>
             <property name="alignment">
              <set>Qt::AlignCenter</set>
             </property>
@@ -128,19 +95,6 @@
           <item>
            <layout class="QHBoxLayout" name="buttonLayout">
             <item>
-             <spacer name="horizontalSpacer">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-            <item>
              <widget class="QPushButton" name="previousButton">
               <property name="text">
                <string>上一首</string>
@@ -160,19 +114,6 @@
                <string>下一首</string>
               </property>
              </widget>
-            </item>
-            <item>
-             <spacer name="horizontalSpacer_2">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
             </item>
            </layout>
           </item>
@@ -205,30 +146,16 @@
        </layout>
       </widget>
       <widget class="QWidget" name="rightWidget" native="true">
-       <layout class="QVBoxLayout" name="verticalLayout">
+       <layout class="QVBoxLayout" name="verticalLayout_3">
         <item>
-         <widget class="QLabel" name="playlistLabel">
-          <property name="text">
-           <string>播放队列</string>
-          </property>
-         </widget>
+         <widget class="QListWidget" name="playlistWidget"/>
         </item>
         <item>
-         <widget class="QListWidget" name="playlistWidget">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
-            <horstretch>1</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <layout class="QHBoxLayout" name="playlistControlLayout">
+         <layout class="QHBoxLayout" name="playlistButtonLayout">
           <item>
            <widget class="QPushButton" name="clearPlaylistButton">
             <property name="text">
-             <string>清空队列</string>
+             <string>清空播放列表</string>
             </property>
            </widget>
           </item>
@@ -252,11 +179,11 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1000</width>
+     <width>800</width>
      <height>30</height>
     </rect>
    </property>
-   <widget class="QMenu" name="menuFile">
+   <widget class="QMenu" name="menu">
     <property name="title">
      <string>文件</string>
     </property>
@@ -265,7 +192,7 @@
     <addaction name="separator"/>
     <addaction name="actionExit"/>
    </widget>
-   <addaction name="menuFile"/>
+   <addaction name="menu"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionOpenFile">
