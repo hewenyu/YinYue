@@ -7,6 +7,7 @@
 #include <QFileSystemWatcher>
 #include "src/core/musicplayer.h"
 #include "src/models/playlist.h"
+#include "src/models/lyric.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -48,6 +49,9 @@ private slots:
     // 文件监控
     void onDirectoryChanged(const QString &path);
     void onFileChanged(const QString &path);
+    
+    // 歌词更新
+    void updateLyric(qint64 position);
 
 private:
     void setupConnections();
@@ -57,15 +61,17 @@ private:
     void refreshMusicLibrary();
     void addToPlaylist(const MusicFile &file);
     void updateCurrentSong(const MusicFile &file);
+    void loadLyric(const QString &musicFilePath);
 
 private:
     Ui::MainWindow *ui;
     MusicPlayer *m_player;
     Playlist *m_playlist;
+    Lyric *m_lyric;
     bool m_isPlaying;
     QString m_currentMusicFolder;
     QFileSystemWatcher *m_fileWatcher;
-    QMap<QString, MusicFile> m_musicLibrary; // 文件路径到音乐文件的映射
+    QMap<QString, MusicFile> m_musicLibrary;
 };
 
 #endif // MAINWINDOW_H

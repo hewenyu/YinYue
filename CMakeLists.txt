@@ -25,6 +25,8 @@ set(PROJECT_SOURCES
         src/models/musicfile.h
         src/models/playlist.cpp
         src/models/playlist.h
+        src/models/lyric.cpp
+        src/models/lyric.h
         ${TS_FILES}
 )
 

@@ -13,6 +13,7 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
     , m_player(new MusicPlayer(this))
     , m_playlist(new Playlist(this))
+    , m_lyric(new Lyric(this))
     , m_isPlaying(false)
     , m_fileWatcher(new QFileSystemWatcher(this))
 {
@@ -21,6 +22,12 @@ MainWindow::MainWindow(QWidget *parent)
     
     // 设置初始音量
     ui->volumeSlider->setValue(m_player->volume());
+    
+    // 设置歌词显示格式
+    ui->lyricEdit->setStyleSheet("QTextEdit { background-color: transparent; color: #333333; }");
+    QFont lyricFont = ui->lyricEdit->font();
+    lyricFont.setPointSize(12);
+    ui->lyricEdit->setFont(lyricFont);
 }
 
 MainWindow::~MainWindow()
@@ -41,6 +48,9 @@ void MainWindow::setupConnections()
             this, &MainWindow::onDirectoryChanged);
     connect(m_fileWatcher, &QFileSystemWatcher::fileChanged,
             this, &MainWindow::onFileChanged);
+    
+    // 连接位置更新信号到歌词更新槽
+    connect(m_player, &MusicPlayer::positionChanged, this, &MainWindow::updateLyric);
 }
 
 void MainWindow::onDirectoryChanged(const QString &path)
@@ -85,7 +95,7 @@ void MainWindow::refreshMusicLibrary()
     dir.setFilter(QDir::Files | QDir::NoDotAndDotDot | QDir::Readable);
     QFileInfoList fileList = dir.entryInfoList();
     
-    // ��新音乐库
+    // 新音乐库
     for (const QFileInfo &fileInfo : fileList) {
         QString filePath = fileInfo.absoluteFilePath();
         if (!m_musicLibrary.contains(filePath)) {
@@ -125,7 +135,7 @@ void MainWindow::loadFolder(const QString &folderPath)
     // 更新当前音乐文件夹
     m_currentMusicFolder = folderPath;
     
-    // 设置文��监控
+    // 设置文件监控
     if (!m_fileWatcher->directories().isEmpty()) {
         m_fileWatcher->removePaths(m_fileWatcher->directories());
     }
@@ -211,6 +221,97 @@ void MainWindow::updateCurrentSong(const MusicFile &file)
             font.setBold(false);
             item->setFont(font);
         }
+    }
+    
+    // 加载歌词
+    loadLyric(file.filePath());
+}
+
+void MainWindow::loadLyric(const QString &musicFilePath)
+{
+    // 清空当前歌词
+    m_lyric->clear();
+    ui->lyricEdit->clear();
+    
+    // 尝试加载同名的.lrc文件
+    QFileInfo musicFile(musicFilePath);
+    QString baseName = musicFile.completeBaseName();
+    QString lrcPath = musicFile.absolutePath() + QDir::separator() + baseName + ".lrc";
+    
+    qDebug() << "尝试加载歌词文件:" << lrcPath;
+    QFileInfo lrcFile(lrcPath);
+    
+    if (lrcFile.exists()) {
+        qDebug() << "歌词文件存在，大小:" << lrcFile.size() << "字节";
+        if (m_lyric->loadFromFile(lrcPath)) {
+            qDebug() << "歌词加载成功";
+            // 显示第一句歌词
+            updateLyric(0);
+        } else {
+            qDebug() << "歌词文件加载失败";
+            ui->lyricEdit->setText(tr("歌词文件格式错误"));
+        }
+    } else {
+        qDebug() << "未找到歌词文件";
+        ui->lyricEdit->setText(tr("暂无歌词"));
+        
+        // 尝试其他可能的歌词文件名
+        QStringList possibleNames;
+        possibleNames << baseName.toLower() + ".lrc"
+                     << baseName.toUpper() + ".lrc"
+                     << musicFile.fileName().toLower().replace(musicFile.suffix(), "lrc")
+                     << musicFile.fileName().toUpper().replace(musicFile.suffix(), "lrc");
+        
+        qDebug() << "尝试其他可能的歌词文件名:";
+        for (const QString &name : possibleNames) {
+            QString path = musicFile.absolutePath() + QDir::separator() + name;
+            qDebug() << "  检查:" << path;
+            if (QFile::exists(path)) {
+                qDebug() << "找到替代歌词文件:" << path;
+                if (m_lyric->loadFromFile(path)) {
+                    qDebug() << "替代歌词文件加载成功";
+                    updateLyric(0);
+                    return;
+                }
+            }
+        }
+    }
+}
+
+void MainWindow::updateLyric(qint64 position)
+{
+    if (m_lyric->isEmpty()) {
+        return;
+    }
+    
+    QString currentLyric = m_lyric->getLyricText(position);
+    if (!currentLyric.isEmpty()) {
+        // 获取当前歌词的前后歌词
+        qint64 prevTime = position - 5000; // 前5秒
+        qint64 nextTime = position + 5000; // 后5秒
+        
+        QString prevLyric = m_lyric->getLyricText(prevTime);
+        QString nextLyric = m_lyric->getLyricText(nextTime);
+        
+        // 构建显示文本
+        QString displayText;
+        if (!prevLyric.isEmpty() && prevLyric != currentLyric) {
+            displayText += QString("<p style='color: #666666;'>%1</p>").arg(prevLyric);
+        }
+        displayText += QString("<p style='color: #000000; font-weight: bold;'>%1</p>").arg(currentLyric);
+        if (!nextLyric.isEmpty() && nextLyric != currentLyric) {
+            displayText += QString("<p style='color: #666666;'>%1</p>").arg(nextLyric);
+        }
+        
+        ui->lyricEdit->setHtml(displayText);
+        
+        // 将当前歌词滚动到中间
+        QTextCursor cursor = ui->lyricEdit->textCursor();
+        cursor.movePosition(QTextCursor::Start);
+        ui->lyricEdit->setTextCursor(cursor);
+        ui->lyricEdit->ensureCursorVisible();
+        
+        qDebug() << "更新歌词:" << position << "ms -" << currentLyric;
     }
 }
 
