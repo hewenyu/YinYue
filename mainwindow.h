@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QLabel>
 #include <QModelIndex>
+#include <QFileSystemWatcher>
 #include "src/core/musicplayer.h"
 #include "src/models/playlist.h"
 
@@ -16,7 +17,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr);
+    explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
 private slots:
@@ -33,24 +34,38 @@ private slots:
     void on_actionExit_triggered();
     
     // 播放列表
+    void on_libraryWidget_doubleClicked(const QModelIndex &index);
     void on_playlistWidget_doubleClicked(const QModelIndex &index);
+    void on_clearPlaylistButton_clicked();
+    void on_removeSelectedButton_clicked();
     
     // 播放器状态更新
     void updatePlaybackState(QMediaPlayer::State state);
     void updatePosition(qint64 position);
     void updateDuration(qint64 duration);
     void handleError(const QString &error);
+    
+    // 文件监控
+    void onDirectoryChanged(const QString &path);
+    void onFileChanged(const QString &path);
 
 private:
     void setupConnections();
     void updateTimeLabel(QLabel *label, qint64 time);
     void loadFile(const QString &filePath);
     void loadFolder(const QString &folderPath);
+    void refreshMusicLibrary();
+    void addToPlaylist(const MusicFile &file);
+    void updateCurrentSong(const MusicFile &file);
 
 private:
     Ui::MainWindow *ui;
     MusicPlayer *m_player;
     Playlist *m_playlist;
     bool m_isPlaying;
+    QString m_currentMusicFolder;
+    QFileSystemWatcher *m_fileWatcher;
+    QMap<QString, MusicFile> m_musicLibrary; // 文件路径到音乐文件的映射
 };
+
 #endif // MAINWINDOW_H

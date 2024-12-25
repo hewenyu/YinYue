@@ -14,6 +14,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_player(new MusicPlayer(this))
     , m_playlist(new Playlist(this))
     , m_isPlaying(false)
+    , m_fileWatcher(new QFileSystemWatcher(this))
 {
     ui->setupUi(this);
     setupConnections();
@@ -34,6 +35,204 @@ void MainWindow::setupConnections()
     connect(m_player, &MusicPlayer::positionChanged, this, &MainWindow::updatePosition);
     connect(m_player, &MusicPlayer::durationChanged, this, &MainWindow::updateDuration);
     connect(m_player, &MusicPlayer::errorOccurred, this, &MainWindow::handleError);
+    
+    // 连接文件监控信号
+    connect(m_fileWatcher, &QFileSystemWatcher::directoryChanged,
+            this, &MainWindow::onDirectoryChanged);
+    connect(m_fileWatcher, &QFileSystemWatcher::fileChanged,
+            this, &MainWindow::onFileChanged);
+}
+
+void MainWindow::onDirectoryChanged(const QString &path)
+{
+    qDebug() << "目录发生变化:" << path;
+    if (path == m_currentMusicFolder) {
+        refreshMusicLibrary();
+    }
+}
+
+void MainWindow::onFileChanged(const QString &path)
+{
+    qDebug() << "文件发生变化:" << path;
+    if (m_musicLibrary.contains(path)) {
+        // 重新加载文件元数据
+        MusicFile musicFile(path);
+        m_musicLibrary[path] = musicFile;
+        refreshMusicLibrary();
+    }
+}
+
+void MainWindow::refreshMusicLibrary()
+{
+    if (m_currentMusicFolder.isEmpty()) {
+        return;
+    }
+    
+    // 保存当前选中的项
+    QString currentItem;
+    if (ui->libraryWidget->currentItem()) {
+        currentItem = ui->libraryWidget->currentItem()->text();
+    }
+    
+    // 清空列表
+    ui->libraryWidget->clear();
+    
+    // 重新扫描目录
+    QDir dir(m_currentMusicFolder);
+    QStringList filters;
+    filters << "*.mp3" << "*.wav" << "*.flac";
+    dir.setNameFilters(filters);
+    dir.setFilter(QDir::Files | QDir::NoDotAndDotDot | QDir::Readable);
+    QFileInfoList fileList = dir.entryInfoList();
+    
+    // 更新音乐库
+    for (const QFileInfo &fileInfo : fileList) {
+        QString filePath = fileInfo.absoluteFilePath();
+        if (!m_musicLibrary.contains(filePath)) {
+            MusicFile musicFile(filePath);
+            m_musicLibrary[filePath] = musicFile;
+        }
+        
+        // 添加到列表显示
+        const MusicFile &musicFile = m_musicLibrary[filePath];
+        QString displayText = musicFile.title();
+        if (!musicFile.artist().isEmpty()) {
+            displayText = musicFile.artist() + " - " + musicFile.title();
+        }
+        QListWidgetItem *item = new QListWidgetItem(displayText, ui->libraryWidget);
+        item->setToolTip(filePath);
+    }
+    
+    // 恢复选中状态
+    if (!currentItem.isEmpty()) {
+        QList<QListWidgetItem*> items = ui->libraryWidget->findItems(currentItem, Qt::MatchExactly);
+        if (!items.isEmpty()) {
+            ui->libraryWidget->setCurrentItem(items.first());
+        }
+    }
+}
+
+void MainWindow::loadFolder(const QString &folderPath)
+{
+    qDebug() << "正在加载文件夹:" << folderPath;
+    
+    QDir dir(folderPath);
+    if (!dir.exists()) {
+        QMessageBox::warning(this, tr("错误"), tr("文件夹不存在"));
+        return;
+    }
+    
+    // 更新当前音乐文件夹
+    m_currentMusicFolder = folderPath;
+    
+    // 设置文件监控
+    if (!m_fileWatcher->directories().isEmpty()) {
+        m_fileWatcher->removePaths(m_fileWatcher->directories());
+    }
+    m_fileWatcher->addPath(folderPath);
+    
+    // 清空并重新加载音乐库
+    m_musicLibrary.clear();
+    refreshMusicLibrary();
+}
+
+void MainWindow::loadFile(const QString &filePath)
+{
+    qDebug() << "正在加载文件:" << filePath;
+    
+    QFileInfo fileInfo(filePath);
+    if (!fileInfo.exists() || !fileInfo.isReadable() || fileInfo.size() == 0) {
+        qDebug() << "文件无效:" << filePath;
+        return;
+    }
+    
+    // 添加到音乐库
+    MusicFile musicFile(filePath);
+    m_musicLibrary[filePath] = musicFile;
+    
+    // 添加到文件监控
+    if (!m_fileWatcher->files().contains(filePath)) {
+        m_fileWatcher->addPath(filePath);
+    }
+    
+    // 添加到音乐库列表
+    QString displayText = musicFile.title();
+    if (!musicFile.artist().isEmpty()) {
+        displayText = musicFile.artist() + " - " + musicFile.title();
+    }
+    QListWidgetItem *item = new QListWidgetItem(displayText, ui->libraryWidget);
+    item->setToolTip(filePath);
+    
+    qDebug() << "文件加载成功:" << displayText;
+}
+
+void MainWindow::addToPlaylist(const MusicFile &file)
+{
+    // 添加到播放列表
+    m_playlist->addFile(file);
+    
+    // 添加到播放队列显示
+    QString displayText = file.title();
+    if (!file.artist().isEmpty()) {
+        displayText = file.artist() + " - " + file.title();
+    }
+    QListWidgetItem *item = new QListWidgetItem(displayText, ui->playlistWidget);
+    item->setToolTip(file.filePath());
+}
+
+void MainWindow::updateCurrentSong(const MusicFile &file)
+{
+    ui->titleLabel->setText(file.title());
+    ui->artistLabel->setText(file.artist());
+    // TODO: 更新封面显示
+}
+
+void MainWindow::on_libraryWidget_doubleClicked(const QModelIndex &index)
+{
+    if (!index.isValid()) {
+        return;
+    }
+    
+    QListWidgetItem *item = ui->libraryWidget->item(index.row());
+    QString filePath = item->toolTip();
+    if (m_musicLibrary.contains(filePath)) {
+        addToPlaylist(m_musicLibrary[filePath]);
+    }
+}
+
+void MainWindow::on_playlistWidget_doubleClicked(const QModelIndex &index)
+{
+    if (!index.isValid()) {
+        return;
+    }
+    
+    int row = index.row();
+    if (row < 0 || row >= m_playlist->count()) {
+        return;
+    }
+    
+    m_playlist->setCurrentIndex(row);
+    MusicFile currentFile = m_playlist->at(row);
+    updateCurrentSong(currentFile);
+    
+    m_player->setSource(currentFile.fileUrl());
+    m_player->play();
+}
+
+void MainWindow::on_clearPlaylistButton_clicked()
+{
+    ui->playlistWidget->clear();
+    m_playlist->clear();
+}
+
+void MainWindow::on_removeSelectedButton_clicked()
+{
+    QList<QListWidgetItem*> items = ui->playlistWidget->selectedItems();
+    for (QListWidgetItem *item : items) {
+        int row = ui->playlistWidget->row(item);
+        m_playlist->removeFile(row);
+        delete item;
+    }
 }
 
 void MainWindow::on_playButton_clicked()
@@ -107,30 +306,6 @@ void MainWindow::on_actionExit_triggered()
     close();
 }
 
-void MainWindow::on_playlistWidget_doubleClicked(const QModelIndex &index)
-{
-    if (!index.isValid()) {
-        return;
-    }
-    
-    int row = index.row();
-    if (row < 0 || row >= m_playlist->count()) {
-        qDebug() << "无效的播放列表索引:" << row;
-        return;
-    }
-    
-    m_playlist->setCurrentIndex(row);
-    MusicFile currentFile = m_playlist->at(row);
-    qDebug() << "正在播放:" << currentFile.title() << "路径:" << currentFile.filePath();
-    
-    m_player->setSource(currentFile.fileUrl());
-    m_player->play();
-    
-    // 更新界面显示
-    ui->titleLabel->setText(currentFile.title());
-    ui->artistLabel->setText(currentFile.artist());
-}
-
 void MainWindow::updatePlaybackState(QMediaPlayer::State state)
 {
     m_isPlaying = (state == QMediaPlayer::PlayingState);
@@ -162,123 +337,5 @@ void MainWindow::updateTimeLabel(QLabel *label, qint64 time)
     label->setText(QString("%1:%2")
         .arg(minutes, 2, 10, QChar('0'))
         .arg(seconds, 2, 10, QChar('0')));
-}
-
-void MainWindow::loadFile(const QString &filePath)
-{
-    qDebug() << "正在加载文件:" << filePath;
-    
-    QFileInfo fileInfo(filePath);
-    if (!fileInfo.exists()) {
-        qDebug() << "文件不存在:" << filePath;
-        return;
-    }
-    
-    if (!fileInfo.isReadable()) {
-        qDebug() << "文件不可读:" << filePath;
-        return;
-    }
-    
-    // 检查文件大小
-    if (fileInfo.size() == 0) {
-        qDebug() << "文件大小为0:" << filePath;
-        return;
-    }
-    
-    MusicFile musicFile(filePath);
-    
-    // 检查文件是否成功加载
-    if (musicFile.title().isEmpty()) {
-        qDebug() << "使用文件名作为标题:" << filePath;
-        QString title = fileInfo.baseName();
-        musicFile.setTitle(title);
-    }
-    
-    // 添加到播放列表
-    m_playlist->addFile(musicFile);
-    
-    // 添加到播放列表显示
-    QListWidgetItem *item = new QListWidgetItem(ui->playlistWidget);
-    QString displayText = musicFile.title();
-    if (!musicFile.artist().isEmpty()) {
-        displayText = musicFile.artist() + " - " + musicFile.title();
-    }
-    item->setText(displayText);
-    item->setToolTip(fileInfo.absoluteFilePath()); // 显示完整路径作为提示
-    
-    qDebug() << "文件加载成功:" << displayText;
-    
-    // 如果是第一个加载的文件，自动选中
-    if (ui->playlistWidget->count() == 1) {
-        ui->playlistWidget->setCurrentRow(0);
-        ui->titleLabel->setText(musicFile.title());
-        ui->artistLabel->setText(musicFile.artist());
-    }
-}
-
-void MainWindow::loadFolder(const QString &folderPath)
-{
-    qDebug() << "正在加载文件夹:" << folderPath;
-    
-    QDir dir(folderPath);
-    if (!dir.exists()) {
-        QMessageBox::warning(this, tr("错误"), tr("文件夹不存在"));
-        return;
-    }
-    
-    // 先获取文件列表
-    QStringList filters;
-    filters << "*.mp3" << "*.wav" << "*.flac";
-    dir.setNameFilters(filters);
-    dir.setFilter(QDir::Files | QDir::NoDotAndDotDot | QDir::Readable);
-    QFileInfoList fileList = dir.entryInfoList();
-    
-    if (fileList.isEmpty()) {
-        QMessageBox::information(this, tr("提示"), 
-            tr("在文件夹 %1 中未找到支持的音乐文件").arg(folderPath));
-        return;
-    }
-
-    // 创建进度对话框
-    QProgressDialog progress(tr("正在加载音乐文件..."), tr("取消"), 0, fileList.size(), this);
-    progress.setWindowModality(Qt::WindowModal);
-    progress.setMinimumDuration(0); // 立即显示进度对话框
-    
-    // 清空当前播放列表
-    ui->playlistWidget->clear();
-    m_playlist->clear();
-    
-    // 加载文件
-    int count = 0;
-    int failedCount = 0;
-    
-    for (const QFileInfo &fileInfo : fileList) {
-        if (progress.wasCanceled()) {
-            qDebug() << "用户取消加载";
-            break;
-        }
-        
-        try {
-            loadFile(fileInfo.absoluteFilePath());
-            count++;
-        } catch (const std::exception &e) {
-            qDebug() << "加载文件失败:" << fileInfo.absoluteFilePath() << e.what();
-            failedCount++;
-        }
-        
-        progress.setValue(count + failedCount);
-        QApplication::processEvents(); // 处理事件，保持界面响应
-    }
-    
-    // 更新状态栏
-    QString statusMessage;
-    if (failedCount > 0) {
-        statusMessage = tr("已加载 %1 个文件，%2 个文件加载失败").arg(count).arg(failedCount);
-    } else {
-        statusMessage = tr("已加载 %1 个音乐文件").arg(count);
-    }
-    statusBar()->showMessage(statusMessage, 3000);
-    
-    qDebug() << "文件夹加载完成:" << statusMessage;
 }
 
