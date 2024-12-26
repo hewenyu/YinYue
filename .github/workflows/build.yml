@@ -15,6 +15,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: List available Qt modules
+      run: |
+        python3 -m pip install aqtinstall
+        aqt list-qt linux desktop --modules 5.15.2 gcc_64
+
     - name: Cache Qt
       id: cache-qt
       uses: actions/cache@v4
@@ -29,7 +34,7 @@ jobs:
         host: 'linux'
         target: 'desktop'
         arch: 'gcc_64'
-        modules: 'qtmultimedia'
+        modules: 'qt3d qtcharts qtdatavis3d qtlottie qtnetworkauth qtpurchasing qtquicktimeline qtscript qtvirtualkeyboard qtwebglplugin'
         cache: true
 
     - name: Cache CMake build
@@ -47,7 +52,8 @@ jobs:
           libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
           gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
           gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
-          gstreamer1.0-libav
+          gstreamer1.0-libav \
+          qtmultimedia5-dev
 
     - name: Configure CMake
       run: |
