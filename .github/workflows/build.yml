@@ -18,7 +18,7 @@ jobs:
   collect-artifacts:
     needs: [linux, windows]
     runs-on: ubuntu-latest
-    if: github.event_name == 'release'
+    if: github.ref == 'refs/heads/master' && startsWith(github.ref, 'refs/tags/')
     
     steps:
     - name: Download All Artifacts
@@ -35,4 +35,4 @@ jobs:
           artifacts/*.deb
           artifacts/*.exe
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
