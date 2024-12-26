@@ -5,6 +5,9 @@
 #include <QDebug>
 #include <QEventLoop>
 
+// 定义静态成员变量
+const QHostAddress DLNAManager::SSDP_MULTICAST_ADDR = QHostAddress("239.255.255.250");
+
 DLNAManager::DLNAManager(QObject *parent)
     : QObject(parent)
     , m_ssdpSocket(new QUdpSocket(this))
@@ -62,46 +65,121 @@ bool DLNAManager::connectToDevice(const QString& deviceId)
 {
     qDebug() << "尝试连接设备:" << deviceId;
     
-    if (!m_devices.contains(deviceId)) {
-        qDebug() << "设备未找到:" << deviceId;
-        emit error(tr("Device not found"));
-        return false;
-    }
-
-    if (m_connected && m_currentDeviceId == deviceId) {
-        qDebug() << "设备已连接:" << deviceId;
-        return true;
-    }
-
-    if (m_connected) {
-        disconnectFromDevice();
-    }
-
-    const DLNADevice& device = m_devices[deviceId];
-    qDebug() << "正在连接到设备:" << device.name;
+    const int MAX_RETRIES = 5;  // 增加最大重试次数
+    const int RETRY_INTERVAL = 1000;  // 减少重试间隔
+    const int DISCOVERY_TIMEOUT = 10000;  // 减少发现超时时间
+    const int CONNECTION_TIMEOUT = 8000;  // 增加连接超时时间
     
-    // 验证设备是否有有效的控制URL
-    if (device.location.isEmpty()) {
-        qDebug() << "设备控制URL为空";
-        emit error(tr("Invalid device control URL"));
-        return false;
+    for (int retry = 0; retry < MAX_RETRIES; retry++) {
+        if (!m_devices.contains(deviceId)) {
+            qDebug() << "设备未找到，尝试重新发现 (尝试" << retry + 1 << "/" << MAX_RETRIES << ")";
+            
+            // 停止之前的发现过程
+            stopDiscovery();
+            
+            // 启动新的发现过程
+            startDiscovery();
+            
+            // 等待设备发现
+            QEventLoop loop;
+            QTimer timer;
+            timer.setSingleShot(true);
+            
+            connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+            connect(this, &DLNAManager::deviceDiscovered, 
+                   [this, deviceId, &loop](const QString& id, const QString&) {
+                if (id == deviceId) {
+                    loop.quit();
+                }
+            });
+            
+            timer.start(DISCOVERY_TIMEOUT);
+            loop.exec();
+            
+            if (!m_devices.contains(deviceId)) {
+                if (retry < MAX_RETRIES - 1) {
+                    QThread::msleep(RETRY_INTERVAL);
+                    continue;
+                }
+                qDebug() << "设备发现失败，达到最大重试次数";
+                emit error(tr("Device not found after multiple attempts"));
+                return false;
+            }
+        }
+
+        if (m_connected && m_currentDeviceId == deviceId) {
+            qDebug() << "设备已连接:" << deviceId;
+            return true;
+        }
+
+        if (m_connected) {
+            disconnectFromDevice();
+        }
+
+        const DLNADevice& device = m_devices[deviceId];
+        qDebug() << "正在连接到设备:" << device.name;
+        
+        // 验证设备是否有有效的控制URL
+        if (device.location.isEmpty()) {
+            qDebug() << "设备控制URL为空";
+            if (retry < MAX_RETRIES - 1) {
+                QThread::msleep(RETRY_INTERVAL);
+                continue;
+            }
+            emit error(tr("Invalid device control URL"));
+            return false;
+        }
+        
+        // 尝试发送一个简单的UPnP动作来测试连接
+        QMap<QString, QString> args;
+        args["InstanceID"] = "0";
+        
+        // 使用事件循环等待连接结果
+        QEventLoop connectionLoop;
+        QTimer connectionTimer;
+        connectionTimer.setSingleShot(true);
+        bool connectionSuccess = false;
+        
+        connect(this, &DLNAManager::connectionStateChanged, [&](bool connected) {
+            connectionSuccess = connected;
+            connectionLoop.quit();
+        });
+        
+        connect(&connectionTimer, &QTimer::timeout, [&]() {
+            qDebug() << "连接超时";
+            connectionLoop.quit();
+        });
+        
+        connectionTimer.start(CONNECTION_TIMEOUT);
+        
+        bool success = sendUPnPAction("urn:schemas-upnp-org:service:AVTransport:1", 
+                                    "GetTransportInfo", args);
+        
+        if (success) {
+            connectionLoop.exec();  // 等待连接状态变化或超时
+            
+            if (connectionSuccess) {
+                m_currentDeviceId = deviceId;
+                m_connected = true;
+                emit connectionStateChanged(true);
+                qDebug() << "设��连接成功:" << device.name;
+                
+                // 启动状态监控
+                startPlaybackMonitoring();
+                
+                return true;
+            }
+        }
+        
+        qDebug() << "连接尝试失败，重试中... (" << retry + 1 << "/" << MAX_RETRIES << ")";
+        if (retry < MAX_RETRIES - 1) {
+            QThread::msleep(RETRY_INTERVAL);
+        }
     }
     
-    // 尝试发送一个简单的UPnP动作来测试连接
-    QMap<QString, QString> args;
-    bool success = sendUPnPAction("urn:schemas-upnp-org:service:AVTransport:1", "GetTransportInfo", args);
-    
-    if (success) {
-        m_currentDeviceId = deviceId;
-        m_connected = true;
-        emit connectionStateChanged(true);
-        qDebug() << "设备连接成功:" << device.name;
-        return true;
-    } else {
-        qDebug() << "设备连接失败:" << device.name;
-        emit error(tr("Failed to connect to device"));
-        return false;
-    }
+    qDebug() << "设备连接失败:" << deviceId;
+    emit error(tr("Failed to connect to device after multiple attempts"));
+    return false;
 }
 
 void DLNAManager::disconnectFromDevice()
@@ -216,17 +294,31 @@ void DLNAManager::handleSSDPResponse()
             qDebug() << "处理设备:" << deviceId;
             qDebug() << "设备地址:" << sender.toString() << ":" << senderPort;
             
+            // 检查是否是小爱音箱
+            if (deviceId == "uuid:507b4406-58e3-4463-95bf-6211f55f12a4") {
+                friendlyName = "小爱音箱-5204";
+            }
+            
             DLNADevice device(deviceId, friendlyName, location);
             device.address = sender;
             device.port = senderPort;
             device.type = deviceType;
+            
+            // 如果是小爱音箱，直接使用已知的控制URL
+            if (deviceId == "uuid:507b4406-58e3-4463-95bf-6211f55f12a4") {
+                QString baseUrl = QString("http://%1:%2").arg(sender.toString()).arg(9999);
+                device.location = baseUrl + "/AVTransport/control";
+                qDebug() << "设置小爱音箱控制URL:" << device.location;
+            }
             
             // 添加或更新设备
             addDevice(device);
             m_deviceTimeouts[deviceId] = QDateTime::currentDateTime();
             
             // 获取设备描述
-            fetchDeviceDescription(location);
+            if (!device.location.endsWith("/control")) {
+                fetchDeviceDescription(location);
+            }
         }
     }
 }
@@ -270,7 +362,7 @@ void DLNAManager::parseDeviceDescription(const QByteArray& data)
                         } else if (xml.name() == "deviceType") {
                             deviceType = xml.readElementText();
                         } else if (xml.name() == "serviceList") {
-                            // ���析服务列表
+                            // 解析服务列表
                             while (!(xml.tokenType() == QXmlStreamReader::EndElement && xml.name() == "serviceList")) {
                                 if (xml.tokenType() == QXmlStreamReader::StartElement && xml.name() == "service") {
                                     QString serviceType;
@@ -402,20 +494,83 @@ bool DLNAManager::playMedia(const QUrl& url)
         qDebug() << "未连接到设备，无法播放媒体";
         return false;
     }
-    
+
     qDebug() << "正在播放媒体:" << url.toString();
+    
     QMap<QString, QString> args;
+    args["InstanceID"] = "0";
     args["CurrentURI"] = url.toString();
     args["CurrentURIMetaData"] = "";
     
-    if (sendUPnPAction("urn:schemas-upnp-org:service:AVTransport:1", "SetAVTransportURI", args)) {
-        bool success = sendUPnPAction("urn:schemas-upnp-org:service:AVTransport:1", "Play", {{"Speed", "1"}});
-        if (success) {
-            emit playbackStateChanged("PLAYING");
-        }
-        return success;
+    // 设置媒体
+    bool success = sendUPnPAction("urn:schemas-upnp-org:service:AVTransport:1", "SetAVTransportURI", args);
+    if (!success) {
+        return false;
     }
-    return false;
+    
+    // 等待媒体加载
+    QThread::msleep(500);
+    
+    // 开始播放
+    args.clear();
+    args["InstanceID"] = "0";
+    args["Speed"] = "1";
+    success = sendUPnPAction("urn:schemas-upnp-org:service:AVTransport:1", "Play", args);
+    
+    if (success) {
+        // 启动状态监控
+        startPlaybackMonitoring();
+        emit playbackStateChanged("PLAYING");
+    }
+    
+    return success;
+}
+
+void DLNAManager::startPlaybackMonitoring()
+{
+    if (!m_monitoringTimer) {
+        m_monitoringTimer = new QTimer(this);
+        m_monitoringTimer->setInterval(500);  // 减少检查间隔到500ms
+        connect(m_monitoringTimer, &QTimer::timeout, this, &DLNAManager::checkPlaybackState);
+    }
+    m_monitoringTimer->start();
+}
+
+void DLNAManager::stopPlaybackMonitoring()
+{
+    if (m_monitoringTimer) {
+        m_monitoringTimer->stop();
+    }
+}
+
+void DLNAManager::checkPlaybackState()
+{
+    if (!m_connected) {
+        stopPlaybackMonitoring();
+        return;
+    }
+
+    QMap<QString, QString> args;
+    args["InstanceID"] = "0";
+    
+    bool success = sendUPnPAction("urn:schemas-upnp-org:service:AVTransport:1", "GetTransportInfo", args);
+    if (success) {
+        // 解析响应并更新状态
+        QString currentState = m_lastResponse.value("CurrentTransportState");
+        if (!currentState.isEmpty() && currentState != m_currentPlaybackState) {
+            m_currentPlaybackState = currentState;
+            emit playbackStateChanged(currentState);
+            qDebug() << "播放状态已更新:" << currentState;
+        }
+    } else {
+        qDebug() << "获取播放状态失败";
+        // 如果获取状态失败，可能是连接断开
+        if (m_connected) {
+            m_connected = false;
+            emit connectionStateChanged(false);
+            qDebug() << "连接已断开";
+        }
+    }
 }
 
 bool DLNAManager::pauseMedia()
@@ -476,7 +631,7 @@ bool DLNAManager::seekTo(qint64 position)
 
 bool DLNAManager::sendUPnPAction(const QString& serviceType, const QString& actionName, const QMap<QString, QString>& arguments)
 {
-    if (!m_connected || !m_devices.contains(m_currentDeviceId)) {
+    if (!m_connected && !m_devices.contains(m_currentDeviceId)) {
         qDebug() << "未连接到设备或设备无效";
         return false;
     }
@@ -487,36 +642,19 @@ bool DLNAManager::sendUPnPAction(const QString& serviceType, const QString& acti
         return false;
     }
     
-    // 构建完���的控制URL
-    QUrl baseUrl(device.location);
-    QString controlPath = device.location;
-    QUrl controlUrl;
-    
-    // 如果控制路径是相对路径，需要与基础URL组合
-    if (!controlPath.startsWith("http://") && !controlPath.startsWith("https://")) {
-        QString basePath = baseUrl.path();
-        if (!basePath.endsWith('/')) {
-            basePath += '/';
-        }
-        if (controlPath.startsWith('/')) {
-            controlPath = controlPath.mid(1);
-        }
-        controlUrl = QUrl(baseUrl.scheme() + "://" + baseUrl.host() + ":" + 
-                         QString::number(baseUrl.port(80)) + "/" + controlPath);
-    } else {
-        controlUrl = QUrl(controlPath);
-    }
-    
+    // 构建控制URL
+    QUrl controlUrl(device.location);
     qDebug() << "发送UPnP动作到:" << controlUrl.toString();
     
     // 构建SOAP消息
     QString soapBody = QString(
-        "<?xml version=\"1.0\"?>\n"
-        "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">\n"
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" "
+        "s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">\n"
         "<s:Body>\n"
-        "<u:%1 xmlns:u=\"%2\">\n"
-        "<InstanceID>0</InstanceID>\n").arg(actionName, serviceType);
+        "<u:%1 xmlns:u=\"%2\">\n").arg(actionName, serviceType);
     
+    // 添加参数
     for (auto it = arguments.constBegin(); it != arguments.constEnd(); ++it) {
         soapBody += QString("<%1>%2</%1>\n").arg(it.key(), it.value());
     }
@@ -528,13 +666,19 @@ bool DLNAManager::sendUPnPAction(const QString& serviceType, const QString& acti
     QNetworkRequest request(controlUrl);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "text/xml; charset=\"utf-8\"");
     request.setRawHeader("SOAPAction", QString("\"%1#%2\"").arg(serviceType, actionName).toUtf8());
+    request.setRawHeader("Connection", "close");
+    request.setRawHeader("Content-Length", QString::number(soapBody.toUtf8().length()).toUtf8());
 
     qDebug() << "发送SOAP消息:" << soapBody;
     QNetworkReply* reply = m_networkManager->post(request, soapBody.toUtf8());
     
     // 等待响应
     QEventLoop loop;
+    QTimer timer;
+    timer.setSingleShot(true);
     connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    timer.start(5000);  // 5秒超时
     loop.exec();
 
     bool success = (reply->error() == QNetworkReply::NoError);
@@ -542,9 +686,23 @@ bool DLNAManager::sendUPnPAction(const QString& serviceType, const QString& acti
         qDebug() << "UPnP动作失败:" << reply->errorString();
         emit error(reply->errorString());
     } else {
-        qDebug() << "UPnP动作成功:" << actionName;
+        qDebug() << "UPnP��作成功:" << actionName;
         QByteArray response = reply->readAll();
         qDebug() << "响应内容:" << response;
+        
+        // 解析响应
+        if (response.contains("GetTransportInfoResponse")) {
+            // 解析播放状态
+            QString currentState;
+            if (response.contains("<CurrentTransportState>")) {
+                int start = response.indexOf("<CurrentTransportState>") + 21;
+                int end = response.indexOf("</CurrentTransportState>");
+                if (start > 0 && end > start) {
+                    currentState = response.mid(start, end - start);
+                    emit playbackStateChanged(currentState);
+                }
+            }
+        }
     }
 
     reply->deleteLater();

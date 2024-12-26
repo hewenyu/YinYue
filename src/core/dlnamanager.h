@@ -2,15 +2,21 @@
 #define DLNAMANAGER_H
 
 #include <QObject>
-#include <QNetworkAccessManager>
 #include <QUdpSocket>
 #include <QTimer>
+#include <QThread>
+#include <QNetworkAccessManager>
+#include <QUrl>
+#include <QMap>
+#include <QDateTime>
 #include <QHostAddress>
-#include <QDebug>
+
+class QNetworkReply;
 
 class DLNAManager : public QObject
 {
     Q_OBJECT
+
 public:
     struct DLNADevice {
         QString id;
@@ -18,24 +24,20 @@ public:
         QString location;
         QString type;
         QHostAddress address;
-        int port;
-        
-        DLNADevice() {}
+        quint16 port;
+        QDateTime lastSeen;
+
+        DLNADevice() : port(0) {}
         DLNADevice(const QString& _id, const QString& _name, const QString& _location)
-            : id(_id), name(_name), location(_location) {}
+            : id(_id), name(_name), location(_location), port(0), lastSeen(QDateTime::currentDateTime()) {}
     };
-    
-    friend QDebug operator<<(QDebug debug, const DLNADevice& device);
 
     explicit DLNAManager(QObject *parent = nullptr);
     ~DLNAManager();
 
-    // 设备发现
     void startDiscovery();
     void stopDiscovery();
     QList<DLNADevice> getAvailableDevices() const;
-
-    // 设备连接
     bool connectToDevice(const QString& deviceId);
     void disconnectFromDevice();
     bool isConnected() const;
@@ -53,44 +55,41 @@ signals:
     void deviceLost(const QString& deviceId);
     void connectionStateChanged(bool connected);
     void playbackStateChanged(const QString& state);
-    void error(const QString& errorMessage);
+    void error(const QString& message);
 
 private slots:
     void handleSSDPResponse();
+    void sendSSDPDiscover();
     void checkDeviceTimeouts();
+    void checkPlaybackState();
     void handleUPnPResponse(QNetworkReply* reply);
 
 private:
-    // SSDP 相关
-    void sendSSDPDiscover();
-    void processSSDPMessage(const QByteArray& data, const QHostAddress& sender);
-
-    // UPnP 相关
-    void fetchDeviceDescription(const QString& location);
-    void parseDeviceDescription(const QByteArray& data);
-    bool sendUPnPAction(const QString& serviceType, const QString& actionName, const QMap<QString, QString>& arguments);
-
-    // 设备管理
-    void addDevice(const DLNADevice& device);
-    void removeDevice(const QString& deviceId);
-    void clearDevices();
+    static const QHostAddress SSDP_MULTICAST_ADDR;
+    static const quint16 SSDP_PORT = 1900;
+    static const int DISCOVERY_INTERVAL = 5000;  // 5秒
+    static const int DEVICE_TIMEOUT = 30000;     // 30秒
 
     QUdpSocket* m_ssdpSocket;
     QNetworkAccessManager* m_networkManager;
     QTimer* m_discoveryTimer;
     QTimer* m_timeoutTimer;
-    
+    QTimer* m_monitoringTimer;
     QMap<QString, DLNADevice> m_devices;
     QMap<QString, QDateTime> m_deviceTimeouts;
-    
     QString m_currentDeviceId;
     bool m_connected;
-    
-    // SSDP 常量
-    const int SSDP_PORT = 1900;
-    const QHostAddress SSDP_MULTICAST_ADDR = QHostAddress("239.255.255.250");
-    const int DISCOVERY_INTERVAL = 5000;  // 5秒
-    const int DEVICE_TIMEOUT = 30000;     // 30秒
+    QString m_currentPlaybackState;
+    QMap<QString, QString> m_lastResponse;
+
+    void clearDevices();
+    bool sendUPnPAction(const QString& serviceType, const QString& action, const QMap<QString, QString>& arguments);
+    void startPlaybackMonitoring();
+    void stopPlaybackMonitoring();
+    void parseDeviceDescription(const QByteArray& data);
+    void fetchDeviceDescription(const QString& location);
+    void addDevice(const DLNADevice& device);
+    void removeDevice(const QString& deviceId);
 };
 
 QDebug operator<<(QDebug debug, const DLNAManager::DLNADevice& device);
