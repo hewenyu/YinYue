@@ -67,6 +67,14 @@ void MainWindow::setupConnections()
     connect(m_player, &MusicPlayer::durationChanged, this, &MainWindow::updateDuration);
     connect(m_player, &MusicPlayer::errorOccurred, this, &MainWindow::handleError);
     
+    // 连接歌曲改变信号
+    connect(m_player, &MusicPlayer::currentSongChanged, this, [this](int index) {
+        if (index >= 0 && index < m_playlist->count()) {
+            MusicFile currentFile = m_playlist->at(index);
+            updateCurrentSong(currentFile, true);  // 更新歌曲信息和歌词
+        }
+    });
+    
     // 连接播放列表信号
     connect(m_playlist, &Playlist::playlistChanged, m_player, &MusicPlayer::onPlaylistChanged);
     
@@ -291,6 +299,7 @@ void MainWindow::updateCurrentSong(const MusicFile &file, bool updatePlayer)
             font.setBold(true);
             item->setFont(font);
             ui->playlistWidget->setCurrentItem(item);
+            ui->playlistWidget->scrollToItem(item);  // 确保当前播放的歌曲可见
         } else {
             font.setBold(false);
             item->setFont(font);

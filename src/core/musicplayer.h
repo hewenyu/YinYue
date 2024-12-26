@@ -39,6 +39,9 @@ public:
     // 处理播放列表变化
     void onPlaylistChanged();
 
+private slots:
+    void onMediaStatusChanged(QMediaPlayer::MediaStatus status);  // 添加处理播放结束的槽函数
+
 signals:
     void stateChanged(QMediaPlayer::State state);
     void positionChanged(qint64 position);
@@ -47,6 +50,7 @@ signals:
     void mediaStatusChanged(QMediaPlayer::MediaStatus status);
     void errorOccurred(const QString &error);
     void playModeChanged(Playlist::PlayMode mode);  // 新增播放模式改变信号
+    void currentSongChanged(int index);  // 新增：当前歌曲改变信号
 
 private:
     QMediaPlayer *m_player;
