@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.16...3.25)
 
 project(YinYue VERSION 0.1 LANGUAGES CXX)
 
@@ -8,6 +8,17 @@ set(CMAKE_AUTORCC ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# macOS 特定设置
+if(APPLE)
+    set(CMAKE_MACOSX_BUNDLE ON)
+    set(MACOSX_BUNDLE_BUNDLE_NAME "YinYue")
+    set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.yinyue.app")
+    set(MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION})
+    set(MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION})
+    set(MACOSX_BUNDLE_COPYRIGHT "Copyright © 2024")
+    set(MACOSX_BUNDLE_INFO_STRING "YinYue")
+endif()
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools Multimedia MultimediaWidgets Sql)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools Multimedia MultimediaWidgets Sql)
@@ -103,5 +114,53 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/yinyue.desktop.in
                ${CMAKE_CURRENT_BINARY_DIR}/yinyue.desktop @ONLY)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/yinyue.desktop
         DESTINATION share/applications)
+
+# 安装配置
+if(APPLE)
+    install(TARGETS ${PROJECT_NAME}
+        BUNDLE DESTINATION .
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib/static
+    )
+    
+    # 设置 DMG 打包选项
+    set(CPACK_GENERATOR "DragNDrop")
+    set(CPACK_DMG_VOLUME_NAME "YinYue")
+    set(CPACK_DMG_FORMAT "UDZO")
+    set(CPACK_DMG_BACKGROUND_IMAGE "${CMAKE_SOURCE_DIR}/resources/dmg_background.png")
+    set(CPACK_DMG_DS_STORE "${CMAKE_SOURCE_DIR}/resources/dmg_DS_Store")
+elseif(WIN32)
+    install(TARGETS ${PROJECT_NAME}
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib/static
+    )
+    
+    # Windows NSIS 打包选项
+    set(CPACK_GENERATOR "NSIS")
+    set(CPACK_NSIS_PACKAGE_NAME "YinYue")
+    set(CPACK_NSIS_DISPLAY_NAME "YinYue Music Player")
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+    set(CPACK_NSIS_MODIFY_PATH ON)
+else()
+    install(TARGETS ${PROJECT_NAME}
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib/static
+    )
+    
+    # Linux DEB 打包选项
+    set(CPACK_GENERATOR "DEB")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "YinYue Team")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt5multimedia5, libqt5widgets5, libqt5core5a")
+endif()
+
+# 通用打包设置
+set(CPACK_PACKAGE_NAME "YinYue")
+set(CPACK_PACKAGE_VENDOR "YinYue Team")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A beautiful music player")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "YinYue")
 
 include(CPack)
