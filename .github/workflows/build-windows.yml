@@ -51,14 +51,13 @@ jobs:
       shell: bash
       run: |
         mkdir -p build
-        cd build
         cmake -GNinja \
           -DCMAKE_C_COMPILER=cl.exe \
           -DCMAKE_CXX_COMPILER=cl.exe \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
           -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} \
-          ..
+          .
       env:
         CMAKE_PREFIX_PATH: ${{ runner.workspace }}/Qt/5.15.2/${{ matrix.qt_arch }}
 
