@@ -22,25 +22,17 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Cache vcpkg
-      uses: actions/cache@v3
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
       with:
-        path: |
-          C:/vcpkg
-          !C:/vcpkg/buildtrees
-          !C:/vcpkg/packages
-          !C:/vcpkg/downloads
-        key: vcpkg-${{ runner.os }}-${{ hashFiles('**/vcpkg.json') }}
-
-    - name: Setup vcpkg
-      run: |
-        git clone https://github.com/Microsoft/vcpkg.git C:/vcpkg
-        C:/vcpkg/bootstrap-vcpkg.bat
-        C:/vcpkg/vcpkg integrate install
-
-    - name: Install Qt (static)
-      run: |
-        C:/vcpkg/vcpkg install qt5-base:x64-windows-static qt5-multimedia:x64-windows-static qt5-tools:x64-windows-static
+        version: '5.15.2'
+        host: windows
+        target: 'desktop'
+        arch: ${{ matrix.qt_arch }}
+        cache: true
+        setup-python: false
+        tools: 'tools_ifw tools_qtcreator,qt.tools.qtcreator'
+        extra: '--external 7z'
 
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v1.1
@@ -66,9 +58,9 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_SYSTEM_NAME=Windows \
           -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} \
-          -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake \
-          -DVCPKG_TARGET_TRIPLET=x64-windows-static \
           ..
+      env:
+        CMAKE_PREFIX_PATH: ${{ runner.workspace }}/Qt/5.15.2/${{ matrix.qt_arch }}
 
     - name: Build
       shell: bash
@@ -76,18 +68,22 @@ jobs:
         cd build
         ninja
 
-    - name: Package
+    - name: Deploy Qt Dependencies
       shell: bash
       run: |
         cd build
-        mkdir -p package
-        cp YinYue.exe package/
-        cd package
-        7z a ../YinYue-windows-x64.zip *
+        windeployqt --release --no-translations --no-plugins --no-opengl-sw YinYue.exe
+
+    - name: Create Release Directory
+      shell: bash
+      run: |
+        mkdir -p release
+        cp build/YinYue.exe release/
+        cp build/*.dll release/
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: YinYue-windows-x64
-        path: build/YinYue-windows-x64.zip
+        name: YinYue-windows-${{ matrix.arch }}
+        path: release
         retention-days: 1 
