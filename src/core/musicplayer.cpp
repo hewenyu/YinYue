@@ -65,6 +65,47 @@ void MusicPlayer::setSource(const QUrl &source)
     m_player->setMedia(QMediaContent(source));
 }
 
+Playlist::PlayMode MusicPlayer::playMode() const
+{
+    return m_playlist ? m_playlist->playMode() : Playlist::Sequential;
+}
+
+void MusicPlayer::setPlayMode(Playlist::PlayMode mode)
+{
+    if (m_playlist) {
+        m_playlist->setPlayMode(mode);
+        emit playModeChanged(mode);
+    }
+}
+
+void MusicPlayer::togglePlayMode()
+{
+    if (!m_playlist) return;
+    
+    Playlist::PlayMode currentMode = m_playlist->playMode();
+    Playlist::PlayMode newMode;
+    
+    // 循环切换播放模式：顺序 -> 随机 -> 单曲循环 -> 列表循环 -> 顺序
+    switch (currentMode) {
+        case Playlist::Sequential:
+            newMode = Playlist::Random;
+            break;
+        case Playlist::Random:
+            newMode = Playlist::RepeatOne;
+            break;
+        case Playlist::RepeatOne:
+            newMode = Playlist::RepeatAll;
+            break;
+        case Playlist::RepeatAll:
+            newMode = Playlist::Sequential;
+            break;
+        default:
+            newMode = Playlist::Sequential;
+    }
+    
+    setPlayMode(newMode);
+}
+
 QMediaPlayer::State MusicPlayer::state() const
 {
     return m_player->state();

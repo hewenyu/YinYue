@@ -24,6 +24,11 @@ public:
     void setPosition(qint64 position);
     void setSource(const QUrl &source);
     void setPlaylist(Playlist *playlist) { m_playlist = playlist; }
+    
+    // 播放模式控制
+    Playlist::PlayMode playMode() const;
+    void setPlayMode(Playlist::PlayMode mode);
+    void togglePlayMode();  // 循环切换播放模式
 
     // 获取状态
     QMediaPlayer::State state() const;
@@ -41,6 +46,7 @@ signals:
     void volumeChanged(int volume);
     void mediaStatusChanged(QMediaPlayer::MediaStatus status);
     void errorOccurred(const QString &error);
+    void playModeChanged(Playlist::PlayMode mode);  // 新增播放模式改变信号
 
 private:
     QMediaPlayer *m_player;

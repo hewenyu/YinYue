@@ -58,6 +58,10 @@ private slots:
     
     // 歌词更新
     void updateLyric(qint64 position);
+    
+    // 播放模式控制
+    void on_playModeButton_clicked();
+    void updatePlayModeButton(Playlist::PlayMode mode);
 
 private:
     void setupConnections();
@@ -81,6 +85,9 @@ private:
     void restorePlaybackState();    // 恢复播放状态
     void startProgressTimer();      // 启动进度条更新定时器
     void stopProgressTimer();       // 停止进度条更新定时器
+
+    void updatePlayModeIcon();  // 更新播放模式按钮图标
+    QString getPlayModeText(Playlist::PlayMode mode);  // 获取播放模式文本描述
 
 private:
     Ui::MainWindow *ui;

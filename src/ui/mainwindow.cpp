@@ -111,6 +111,9 @@ void MainWindow::setupConnections()
             startProgressTimer();
         }
     });
+    
+    // 连接播放模式信号
+    connect(m_player, &MusicPlayer::playModeChanged, this, &MainWindow::updatePlayModeButton);
 }
 
 void MainWindow::onDirectoryChanged(const QString &path)
@@ -551,7 +554,7 @@ void MainWindow::on_previousButton_clicked()
     if (prevIndex != -1) {
         m_playlist->setCurrentIndex(prevIndex);
         MusicFile currentFile = m_playlist->at(prevIndex);
-        updateCurrentSong(currentFile, true);  // 切换到上一首时完��更新
+        updateCurrentSong(currentFile, true);  // 切换到上一首时完整更新
         m_player->setSource(currentFile.fileUrl());
         m_player->play();
     }
@@ -698,7 +701,7 @@ void MainWindow::loadSettings()
     ui->volumeSlider->setValue(volume);
     m_player->setVolume(volume);
     
-    // 加载上次播放的歌曲索引和位��
+    // 加载上次播放的歌曲索引和位置
     int lastIndex = settings.value("currentIndex", -1).toInt();
     qint64 lastPosition = settings.value("position", 0).toLongLong();
     bool wasPlaying = settings.value("isPlaying", false).toBool();
@@ -717,6 +720,10 @@ void MainWindow::loadSettings()
             m_player->play();
         }
     }
+    
+    // 加载播放模式
+    int playMode = settings.value("playMode", static_cast<int>(Playlist::Sequential)).toInt();
+    m_player->setPlayMode(static_cast<Playlist::PlayMode>(playMode));
 }
 
 void MainWindow::saveSettings()
@@ -739,10 +746,13 @@ void MainWindow::saveSettings()
     // 保存音量
     settings.setValue("volume", m_player->volume());
     
-    // 保存当前播放的歌曲���引、位置和状态
+    // 保存当前播放的歌曲索引、位置和状态
     settings.setValue("currentIndex", m_playlist->currentIndex());
     settings.setValue("position", m_player->position());
     settings.setValue("isPlaying", m_isPlaying);
+    
+    // 保存播放模式
+    settings.setValue("playMode", static_cast<int>(m_player->playMode()));
     
     settings.sync();
 }
@@ -798,5 +808,33 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     savePlaybackState();
     QMainWindow::closeEvent(event);
+}
+
+void MainWindow::on_playModeButton_clicked()
+{
+    m_player->togglePlayMode();
+}
+
+void MainWindow::updatePlayModeButton(Playlist::PlayMode mode)
+{
+    QString modeText = getPlayModeText(mode);
+    ui->playModeButton->setText(modeText);
+    ui->playModeButton->setToolTip(tr("当前播放模式：%1").arg(modeText));
+}
+
+QString MainWindow::getPlayModeText(Playlist::PlayMode mode)
+{
+    switch (mode) {
+        case Playlist::Sequential:
+            return tr("顺序");
+        case Playlist::Random:
+            return tr("随机");
+        case Playlist::RepeatOne:
+            return tr("单曲");
+        case Playlist::RepeatAll:
+            return tr("循环");
+        default:
+            return tr("顺序");
+    }
 }
 
