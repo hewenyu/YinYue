@@ -68,9 +68,22 @@ jobs:
         cd build
         ninja
 
+    - name: Deploy Qt Dependencies
+      shell: bash
+      run: |
+        cd build
+        windeployqt --release --no-translations --no-plugins --no-opengl-sw YinYue.exe
+
+    - name: Create Release Directory
+      shell: bash
+      run: |
+        mkdir -p release
+        cp build/YinYue.exe release/
+        cp build/*.dll release/
+
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: YinYue-windows-${{ matrix.arch }}
-        path: build/YinYue.exe
+        path: release
         retention-days: 1 

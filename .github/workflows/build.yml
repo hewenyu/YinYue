@@ -28,11 +28,17 @@ jobs:
         pattern: YinYue-*
         merge-multiple: true
 
+    - name: Create Release Packages
+      run: |
+        cd artifacts
+        zip -r YinYue-windows-x64.zip YinYue-windows-x64/*
+        tar czf YinYue-linux-amd64.tar.gz YinYue-linux-amd64/YinYue
+
     - name: Upload Release Assets
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          artifacts/YinYue
-          artifacts/YinYue.exe
+          artifacts/YinYue-windows-x64.zip
+          artifacts/YinYue-linux-amd64.tar.gz
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
