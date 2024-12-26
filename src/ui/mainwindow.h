@@ -7,9 +7,9 @@
 #include <QFileSystemWatcher>
 #include <QTimer>
 #include <QCloseEvent>
-#include "src/core/musicplayer.h"
-#include "src/models/playlist.h"
-#include "src/models/lyric.h"
+#include "core/musicplayer.h"
+#include "models/playlist.h"
+#include "models/lyric.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
