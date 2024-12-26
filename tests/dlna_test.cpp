@@ -4,7 +4,7 @@
 #include "core/dlnamanager.h"
 #include "core/musicplayer.h"
 #include "models/musicfile.h"
-
+#include <unistd.h>
 class DLNATest : public QObject
 {
     Q_OBJECT
@@ -129,6 +129,8 @@ void DLNATest::testDeviceDiscovery()
     bool signalReceived = discoveredSpy.wait(10000);  // 增加等待时间到10秒
     qDebug() << "信号等待结果:" << (signalReceived ? "成功" : "超时");
     QVERIFY(signalReceived);
+    // sleep 1500ms
+    sleep(1);
     
     qDebug() << "验证发现的设备...";
     QList<DLNAManager::DLNADevice> devices = m_dlnaManager->getAvailableDevices();
@@ -143,7 +145,7 @@ void DLNATest::testDeviceDiscovery()
             break;
         }
         // 等待1000ms
-        QThread::msleep(1000);
+        sleep(1);
     }
     
     qDebug() << "发现的设备ID:" << (found ? m_testDeviceId : "未找到");
@@ -185,7 +187,7 @@ void DLNATest::testDeviceConnection()
             break;
         }
         // 等待1000ms
-        QThread::msleep(1000);
+        sleep(1);
     }
     
     qDebug() << "发现的设备ID:" << (found ? m_testDeviceId : "未找到");

@@ -90,6 +90,7 @@ private:
     void fetchDeviceDescription(const QString& location);
     void addDevice(const DLNADevice& device);
     void removeDevice(const QString& deviceId);
+    QString extractHeader(const QString& response, const QString& header);
 };
 
 QDebug operator<<(QDebug debug, const DLNAManager::DLNADevice& device);
