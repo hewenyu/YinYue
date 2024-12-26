@@ -33,14 +33,28 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake ninja-build \
-          libgl1-mesa-dev libpulse-dev libasound2-dev \
-          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-          gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
-          gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
-          gstreamer1.0-libav \
-          qtbase5-dev qtmultimedia5-dev qttools5-dev \
-          qttools5-dev-tools libqt5multimedia5-plugins
+        # 首先安装基础开发工具
+        sudo apt-get install -y build-essential cmake ninja-build
+        
+        # 安装基础库依赖
+        sudo apt-get install -y libunwind-dev libgl1-mesa-dev \
+          libpulse-dev libasound2-dev
+        
+        # 安装 GStreamer 依赖
+        sudo apt-get install -y libgstreamer1.0-dev \
+          libgstreamer-plugins-base1.0-dev \
+          gstreamer1.0-plugins-base \
+          gstreamer1.0-plugins-good \
+          gstreamer1.0-plugins-bad \
+          gstreamer1.0-plugins-ugly \
+          gstreamer1.0-libav
+        
+        # 安装 Qt5 依赖
+        sudo apt-get install -y qtbase5-dev \
+          qtmultimedia5-dev \
+          qttools5-dev \
+          qttools5-dev-tools \
+          libqt5multimedia5-plugins
 
     - name: Configure CMake
       run: |
