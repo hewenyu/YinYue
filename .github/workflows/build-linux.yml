@@ -16,9 +16,6 @@ jobs:
           - arch: amd64
             qt_arch: gcc_64
             platform: x86_64-linux-gnu
-        #   - arch: arm64
-        #     qt_arch: gcc_arm64
-        #     platform: aarch64-linux-gnu
     
     runs-on: ubuntu-latest
     
@@ -71,14 +68,9 @@ jobs:
         cd build
         ninja
 
-    - name: Package
-      run: |
-        cd build
-        cpack -G DEB
-
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: YinYue-linux-${{ matrix.arch }}
-        path: build/*.deb
+        path: build/YinYue
         retention-days: 1 

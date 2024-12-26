@@ -11,14 +11,11 @@ jobs:
   build-windows:
     strategy:
       matrix:
-        arch: [x64, x86]
+        arch: [x64]
         include:
           - arch: x64
             qt_arch: win64_msvc2019_64
             msvc_arch: x64
-          - arch: x86
-            qt_arch: win32_msvc2019
-            msvc_arch: x86
     
     runs-on: windows-latest
     
@@ -71,15 +68,9 @@ jobs:
         cd build
         ninja
 
-    - name: Package
-      shell: bash
-      run: |
-        cd build
-        cpack -G NSIS
-
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: YinYue-windows-${{ matrix.arch }}
-        path: build/*.exe
+        path: build/YinYue.exe
         retention-days: 1 

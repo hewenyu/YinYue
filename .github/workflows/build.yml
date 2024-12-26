@@ -1,10 +1,6 @@
 name: Build and Package
 
 on:
-#   push:
-#     branches: [ master ]
-#   pull_request:
-#     branches: [ master ]
   release:
     types: [created]
 
@@ -36,7 +32,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          artifacts/*.deb
-          artifacts/*.exe
+          artifacts/YinYue
+          artifacts/YinYue.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
