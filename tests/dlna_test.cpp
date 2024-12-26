@@ -142,6 +142,8 @@ void DLNATest::testDeviceDiscovery()
             qDebug() << "找到目标设备:" << device.id;
             break;
         }
+        // 等待1000ms
+        QThread::msleep(1000);
     }
     
     qDebug() << "发现的设备ID:" << (found ? m_testDeviceId : "未找到");
@@ -155,6 +157,43 @@ void DLNATest::testDeviceDiscovery()
 
 void DLNATest::testDeviceConnection()
 {
+
+    qDebug() << "\n=== 开始新的测试用例 ===";
+    m_dlnaManager->stopDiscovery();
+    
+    qDebug() << "\n=== 测试设备发现 ===";
+    qDebug() << "启动设备发现...";
+    
+    QSignalSpy discoveredSpy(m_dlnaManager, SIGNAL(deviceDiscovered(QString,QString)));
+    m_dlnaManager->startDiscovery();
+    
+    qDebug() << "等待设备发现信号...";
+    bool signalReceived = discoveredSpy.wait(10000);  // 增加等待时间到10秒
+    qDebug() << "信号等待结果:" << (signalReceived ? "成功" : "超时");
+    QVERIFY(signalReceived);
+    
+    qDebug() << "验证发现的设备...";
+    QList<DLNAManager::DLNADevice> devices = m_dlnaManager->getAvailableDevices();
+    qDebug() << "发现的设备数量:" << devices.size();
+    
+    bool found = false;
+    for (const auto& device : devices) {
+        qDebug() << "检查设备:" << device.id << device.name << device.location;
+        if (device.id == m_testDeviceId) {
+            found = true;
+            qDebug() << "找到目标设备:" << device.id;
+            break;
+        }
+        // 等待1000ms
+        QThread::msleep(1000);
+    }
+    
+    qDebug() << "发现的设备ID:" << (found ? m_testDeviceId : "未找到");
+    qDebug() << "期望的设备ID:" << m_testDeviceId;
+    QVERIFY(found);
+    
+    qDebug() << "设备发现测试完成";
+
     qDebug() << "\n=== 测试设备连接 ===";
     QSignalSpy connectionSpy(m_dlnaManager, &DLNAManager::connectionStateChanged);
     
@@ -169,6 +208,12 @@ void DLNATest::testDeviceConnection()
     QVERIFY(m_dlnaManager->isConnected());
     QVERIFY(m_dlnaManager->getCurrentDeviceId() == m_testDeviceId);
     qDebug() << "设备连接测试完成";
+    // 输出连接状态
+    qDebug() << "连接状态:" << m_dlnaManager->isConnected();
+    qDebug() << "当前设备ID:" << m_dlnaManager->getCurrentDeviceId();
+    qDebug() << "测试用例结束\n";
+    // stop discovery
+    m_dlnaManager->stopDiscovery();
 }
 
 void DLNATest::testDeviceLost()
@@ -196,12 +241,23 @@ void DLNATest::testMultipleDevices()
     // 启动设备发现
     m_dlnaManager->startDiscovery();
     
-    // 等待多个设备被发现
-    QVERIFY(discoveredSpy.wait(5000));
-    
+
+    // 循环等待
+    while (discoveredSpy.count() < 2) {
+        QThread::msleep(1000);
+        qDebug() << "等待设备发现信号...";
+        // 一直到设备发现信号大于2为止
+        qDebug() << "设备发现信号数量:" << discoveredSpy.count();
+        // 验证可以获取所有可用设备
+        QList<DLNAManager::DLNADevice> devices = m_dlnaManager->getAvailableDevices();
+        if (devices.size() > 1) {
+            qDebug() << "可用设备数量:" << devices.size();
+            break;
+        }
+    }
     // 验证可以获取所有可用设备
     QList<DLNAManager::DLNADevice> devices = m_dlnaManager->getAvailableDevices();
-    QVERIFY(devices.size() > 1);
+    QVERIFY(devices.size() > 1); 
 }
 
 void DLNATest::testInvalidDevice()

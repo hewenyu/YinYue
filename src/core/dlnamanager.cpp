@@ -65,120 +65,56 @@ bool DLNAManager::connectToDevice(const QString& deviceId)
 {
     qDebug() << "尝试连接设备:" << deviceId;
     
-    const int MAX_RETRIES = 5;  // 增加最大重试次数
-    const int RETRY_INTERVAL = 1000;  // 减少重试间隔
-    const int DISCOVERY_TIMEOUT = 10000;  // 减少发现超时时间
-    const int CONNECTION_TIMEOUT = 8000;  // 增加连接超时时间
+    if (!m_devices.contains(deviceId)) {
+        qDebug() << "设备未找到:" << deviceId;
+        emit error(tr("Device not found"));
+        return false;
+    }
+
+    if (m_connected && m_currentDeviceId == deviceId) {
+        qDebug() << "设备已连接:" << deviceId;
+        return true;
+    }
+
+    if (m_connected) {
+        disconnectFromDevice();
+    }
+
+    const DLNADevice& device = m_devices[deviceId];
+    qDebug() << "正在连接到设备:" << device.name;
     
-    for (int retry = 0; retry < MAX_RETRIES; retry++) {
-        if (!m_devices.contains(deviceId)) {
-            qDebug() << "设备未找到，尝试重新发现 (尝试" << retry + 1 << "/" << MAX_RETRIES << ")";
-            
-            // 停止之前的发现过程
-            stopDiscovery();
-            
-            // 启动新的发现过程
-            startDiscovery();
-            
-            // 等待设备发现
-            QEventLoop loop;
-            QTimer timer;
-            timer.setSingleShot(true);
-            
-            connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-            connect(this, &DLNAManager::deviceDiscovered, 
-                   [this, deviceId, &loop](const QString& id, const QString&) {
-                if (id == deviceId) {
-                    loop.quit();
-                }
-            });
-            
-            timer.start(DISCOVERY_TIMEOUT);
-            loop.exec();
-            
-            if (!m_devices.contains(deviceId)) {
-                if (retry < MAX_RETRIES - 1) {
-                    QThread::msleep(RETRY_INTERVAL);
-                    continue;
-                }
-                qDebug() << "设备发现失败，达到最大重试次数";
-                emit error(tr("Device not found after multiple attempts"));
-                return false;
-            }
-        }
-
-        if (m_connected && m_currentDeviceId == deviceId) {
-            qDebug() << "设备已连接:" << deviceId;
-            return true;
-        }
-
-        if (m_connected) {
-            disconnectFromDevice();
-        }
-
-        const DLNADevice& device = m_devices[deviceId];
-        qDebug() << "正在连接到设备:" << device.name;
-        
-        // 验证设备是否有有效的控制URL
-        if (device.location.isEmpty()) {
-            qDebug() << "设备控制URL为空";
-            if (retry < MAX_RETRIES - 1) {
-                QThread::msleep(RETRY_INTERVAL);
-                continue;
-            }
-            emit error(tr("Invalid device control URL"));
-            return false;
-        }
-        
-        // 尝试发送一个简单的UPnP动作来测试连接
-        QMap<QString, QString> args;
-        args["InstanceID"] = "0";
-        
-        // 使用事件循环等待连接结果
-        QEventLoop connectionLoop;
-        QTimer connectionTimer;
-        connectionTimer.setSingleShot(true);
-        bool connectionSuccess = false;
-        
-        connect(this, &DLNAManager::connectionStateChanged, [&](bool connected) {
-            connectionSuccess = connected;
-            connectionLoop.quit();
-        });
-        
-        connect(&connectionTimer, &QTimer::timeout, [&]() {
-            qDebug() << "连接超时";
-            connectionLoop.quit();
-        });
-        
-        connectionTimer.start(CONNECTION_TIMEOUT);
-        
-        bool success = sendUPnPAction("urn:schemas-upnp-org:service:AVTransport:1", 
-                                    "GetTransportInfo", args);
-        
-        if (success) {
-            connectionLoop.exec();  // 等待连接状态变化或超时
-            
-            if (connectionSuccess) {
-                m_currentDeviceId = deviceId;
-                m_connected = true;
-                emit connectionStateChanged(true);
-                qDebug() << "设��连接成功:" << device.name;
-                
-                // 启动状态监控
-                startPlaybackMonitoring();
-                
-                return true;
-            }
-        }
-        
-        qDebug() << "连接尝试失败，重试中... (" << retry + 1 << "/" << MAX_RETRIES << ")";
-        if (retry < MAX_RETRIES - 1) {
-            QThread::msleep(RETRY_INTERVAL);
-        }
+    // 验证设备是否有有��的控制URL
+    if (device.location.isEmpty()) {
+        qDebug() << "设备控制URL为空";
+        emit error(tr("Invalid device control URL"));
+        return false;
     }
     
+    // 设置当前设备ID（在发送UPnP动作之前）
+    m_currentDeviceId = deviceId;
+    
+    // 尝试发送一个简单的UPnP动作来测试连接
+    QMap<QString, QString> args;
+    args["InstanceID"] = "0";
+    
+    bool success = sendUPnPAction("urn:schemas-upnp-org:service:AVTransport:1", 
+                                "GetTransportInfo", args);
+    
+    if (success) {
+        m_connected = true;
+        emit connectionStateChanged(true);
+        qDebug() << "设备连接成功:" << device.name;
+        
+        // 启动状态监控
+        startPlaybackMonitoring();
+        
+        return true;
+    }
+    
+    // 如果连接失败，清除当前设备ID
+    m_currentDeviceId.clear();
     qDebug() << "设备连接失败:" << deviceId;
-    emit error(tr("Failed to connect to device after multiple attempts"));
+    emit error(tr("Failed to connect to device"));
     return false;
 }
 
@@ -253,71 +189,59 @@ void DLNAManager::handleSSDPResponse()
     while (m_ssdpSocket->hasPendingDatagrams()) {
         QByteArray datagram;
         datagram.resize(m_ssdpSocket->pendingDatagramSize());
-        QHostAddress sender;
+        QHostAddress senderAddress;
         quint16 senderPort;
 
-        m_ssdpSocket->readDatagram(datagram.data(), datagram.size(), &sender, &senderPort);
-        
-        // 解析SSDP响应
+        m_ssdpSocket->readDatagram(datagram.data(), datagram.size(), &senderAddress, &senderPort);
         QString response = QString::fromUtf8(datagram);
-        QStringList lines = response.split("\r\n");
-        
-        QString location;
-        QString usn;
-        QString friendlyName = "Unknown Device";
-        QString deviceType;
-        
-        qDebug() << "收到SSDP响应:";
-        qDebug() << response;
-        
-        for (const QString& line : lines) {
-            if (line.startsWith("LOCATION:", Qt::CaseInsensitive)) {
-                location = line.mid(9).trimmed();
-                qDebug() << "发现设备位置:" << location;
+        qDebug() << "收到SSDP响应:\n" << response;
+
+        // 解析设备信息
+        QString location = extractHeader(response, "LOCATION");
+        QString st = extractHeader(response, "ST");
+        QString usn = extractHeader(response, "USN");
+
+        if (!location.isEmpty()) {
+            qDebug() << "发现设备位置:" << location;
+            qDebug() << "发现设备类型:" << st;
+            qDebug() << "发现设备USN:" << usn;
+
+            // 提取设备ID
+            QString deviceId;
+            if (usn.contains("::")) {
+                deviceId = usn.split("::").first();
+            } else {
+                deviceId = usn;
             }
-            else if (line.startsWith("USN:", Qt::CaseInsensitive)) {
-                usn = line.mid(4).trimmed();
-                qDebug() << "发现设备USN:" << usn;
-            }
-            else if (line.startsWith("NT:", Qt::CaseInsensitive) || line.startsWith("ST:", Qt::CaseInsensitive)) {
-                deviceType = line.mid(3).trimmed();
-                qDebug() << "发现设备类型:" << deviceType;
-            }
-        }
-        
-        if (!location.isEmpty() && !usn.isEmpty()) {
-            QString deviceId = usn;
-            if (deviceId.contains("::")) {
-                deviceId = deviceId.split("::").first();
-            }
-            
             qDebug() << "处理设备:" << deviceId;
-            qDebug() << "设备地址:" << sender.toString() << ":" << senderPort;
-            
-            // 检查是否是小爱音箱
-            if (deviceId == "uuid:507b4406-58e3-4463-95bf-6211f55f12a4") {
-                friendlyName = "小爱音箱-5204";
-            }
-            
-            DLNADevice device(deviceId, friendlyName, location);
-            device.address = sender;
-            device.port = senderPort;
-            device.type = deviceType;
-            
-            // 如果是小爱音箱，直接使用已知的控制URL
-            if (deviceId == "uuid:507b4406-58e3-4463-95bf-6211f55f12a4") {
-                QString baseUrl = QString("http://%1:%2").arg(sender.toString()).arg(9999);
-                device.location = baseUrl + "/AVTransport/control";
-                qDebug() << "设置小爱音箱控制URL:" << device.location;
-            }
-            
-            // 添加或更新设备
-            addDevice(device);
-            m_deviceTimeouts[deviceId] = QDateTime::currentDateTime();
-            
-            // 获取设备描述
-            if (!device.location.endsWith("/control")) {
-                fetchDeviceDescription(location);
+
+            // 记录设备地址和端口
+            qDebug() << "设备地址:" << senderAddress.toString() << ":" << senderPort;
+
+            // 检查是否已存在相同ID的设备
+            if (m_devices.contains(deviceId)) {
+                // 更新现有设备的信息，但保留名称等已知信息
+                DLNADevice& existingDevice = m_devices[deviceId];
+                existingDevice.address = senderAddress;
+                existingDevice.port = senderPort;
+                existingDevice.lastSeen = QDateTime::currentDateTime();
+                if (location != existingDevice.location) {
+                    existingDevice.location = location;
+                    fetchDeviceDescription(location);  // 获取更新的设备描述
+                }
+            } else {
+                // 创建新设备
+                DLNADevice newDevice;
+                newDevice.id = deviceId;
+                newDevice.name = "Unknown Device";  // 临时名称
+                newDevice.location = location;
+                newDevice.type = st;
+                newDevice.address = senderAddress;
+                newDevice.port = senderPort;
+                newDevice.lastSeen = QDateTime::currentDateTime();
+                
+                addDevice(newDevice);
+                fetchDeviceDescription(location);  // 获取设备描述
             }
         }
     }
@@ -325,11 +249,17 @@ void DLNAManager::handleSSDPResponse()
 
 void DLNAManager::fetchDeviceDescription(const QString& location)
 {
-    QNetworkRequest request(location);
+    QUrl url(location);
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::UserAgentHeader, "YinYue/1.0");
+    
     QNetworkReply* reply = m_networkManager->get(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, location]() {
         if (reply->error() == QNetworkReply::NoError) {
-            parseDeviceDescription(reply->readAll());
+            QByteArray data = reply->readAll();
+            parseDeviceDescription(data);
+        } else {
+            qDebug() << "获取设备描述失败:" << reply->errorString();
         }
         reply->deleteLater();
     });
@@ -338,95 +268,76 @@ void DLNAManager::fetchDeviceDescription(const QString& location)
 void DLNAManager::parseDeviceDescription(const QByteArray& data)
 {
     QXmlStreamReader xml(data);
-    QString deviceId;
-    QString friendlyName;
-    QString deviceType;
+    QString currentDeviceId;
+    QString deviceName;
     QString controlURL;
-    QString baseURL;
-
+    QString serviceType;
+    
     while (!xml.atEnd() && !xml.hasError()) {
-        if (xml.readNextStartElement()) {
-            if (xml.name() == "URLBase") {
-                baseURL = xml.readElementText();
-                if (!baseURL.endsWith('/')) {
-                    baseURL += '/';
-                }
-            } else if (xml.name() == "device") {
-                // 解析设备信息
-                while (!(xml.tokenType() == QXmlStreamReader::EndElement && xml.name() == "device")) {
-                    if (xml.tokenType() == QXmlStreamReader::StartElement) {
-                        if (xml.name() == "UDN") {
-                            deviceId = xml.readElementText();
-                        } else if (xml.name() == "friendlyName") {
-                            friendlyName = xml.readElementText();
-                        } else if (xml.name() == "deviceType") {
-                            deviceType = xml.readElementText();
-                        } else if (xml.name() == "serviceList") {
-                            // 解析服务列表
-                            while (!(xml.tokenType() == QXmlStreamReader::EndElement && xml.name() == "serviceList")) {
-                                if (xml.tokenType() == QXmlStreamReader::StartElement && xml.name() == "service") {
-                                    QString serviceType;
-                                    QString serviceId;
-                                    QString scpdUrl;
-                                    QString control;
-                                    QString eventSub;
-                                    
-                                    // 解析服务信息
-                                    while (!(xml.tokenType() == QXmlStreamReader::EndElement && xml.name() == "service")) {
-                                        if (xml.tokenType() == QXmlStreamReader::StartElement) {
-                                            if (xml.name() == "serviceType") {
-                                                serviceType = xml.readElementText();
-                                            } else if (xml.name() == "serviceId") {
-                                                serviceId = xml.readElementText();
-                                            } else if (xml.name() == "SCPDURL") {
-                                                scpdUrl = xml.readElementText();
-                                            } else if (xml.name() == "controlURL") {
-                                                control = xml.readElementText();
-                                                qDebug() << "找到控制URL:" << control << "服务类型:" << serviceType;
-                                            } else if (xml.name() == "eventSubURL") {
-                                                eventSub = xml.readElementText();
-                                            }
-                                        }
-                                        xml.readNext();
-                                    }
-                                    
-                                    // 保存 AVTransport 服务的控制 URL
-                                    if (serviceType.contains("AVTransport")) {
-                                        controlURL = control;
-                                        qDebug() << "找到 AVTransport 服务控制 URL:" << controlURL;
-                                    }
-                                }
-                                xml.readNext();
-                            }
-                        }
-                    }
-                    xml.readNext();
-                }
-            }
-        }
-    }
-
-    if (!deviceId.isEmpty() && !friendlyName.isEmpty()) {
-        // 构建完整的控制URL
-        QString location;
-        if (controlURL.startsWith("http://") || controlURL.startsWith("https://")) {
-            location = controlURL;
-        } else {
-            if (baseURL.isEmpty()) {
-                QUrl deviceUrl(m_devices[deviceId].location);
-                baseURL = deviceUrl.scheme() + "://" + deviceUrl.host() + ":" + QString::number(deviceUrl.port(80)) + "/";
-            }
-            location = baseURL + (controlURL.startsWith('/') ? controlURL.mid(1) : controlURL);
-        }
+        QXmlStreamReader::TokenType token = xml.readNext();
         
-        qDebug() << "设备信息:" << deviceId << friendlyName << location;
-        DLNADevice device(deviceId, friendlyName, location);
-        device.type = deviceType;
-        addDevice(device);
-        qDebug() << "设备描述已更新:" << device;
-    } else {
-        qDebug() << "设备描述解析失败: deviceId=" << deviceId << "friendlyName=" << friendlyName;
+        if (token == QXmlStreamReader::StartElement) {
+            if (xml.name() == "device") {
+                // 重置设备信息
+                currentDeviceId.clear();
+                deviceName.clear();
+            }
+            else if (xml.name() == "UDN") {
+                currentDeviceId = xml.readElementText();
+            }
+            else if (xml.name() == "friendlyName") {
+                deviceName = xml.readElementText();
+                if (!currentDeviceId.isEmpty() && m_devices.contains(currentDeviceId)) {
+                    DLNADevice& device = m_devices[currentDeviceId];
+                    device.name = deviceName;
+                    qDebug() << "设备名称已更新:" << deviceName;
+                    emit deviceDiscovered(device.id, device.name);
+                }
+            }
+            else if (xml.name() == "serviceType") {
+                serviceType = xml.readElementText();
+            }
+            else if (xml.name() == "controlURL") {
+                controlURL = xml.readElementText();
+                qDebug() << "找到控制URL:" << controlURL << "服务类型:" << serviceType;
+                
+                if (serviceType.contains("AVTransport")) {
+                    qDebug() << "找到 AVTransport 服务控制 URL:" << controlURL;
+                    if (!currentDeviceId.isEmpty() && m_devices.contains(currentDeviceId)) {
+                        DLNADevice& device = m_devices[currentDeviceId];
+                        // 更新设备的控制URL
+                        if (!controlURL.startsWith("http")) {
+                            QUrl baseUrl(device.location);
+                            QString basePath = baseUrl.path();
+                            basePath = basePath.left(basePath.lastIndexOf('/') + 1);
+                            controlURL = QString("%1://%2:%3%4%5")
+                                .arg(baseUrl.scheme())
+                                .arg(baseUrl.host())
+                                .arg(baseUrl.port())
+                                .arg(basePath)
+                                .arg(controlURL);
+                        }
+                        device.location = controlURL;
+                        qDebug() << "设备信息:" << device.id << device.name << device.location;
+                        emit deviceDiscovered(device.id, device.name);
+                    }
+                }
+            }
+        }
     }
+    
+    if (xml.hasError()) {
+        qDebug() << "XML解析错误:" << xml.errorString();
+    }
+}
+
+QString DLNAManager::extractHeader(const QString& response, const QString& header)
+{
+    QRegExp rx(header + ": *([^\r\n]+)", Qt::CaseInsensitive);
+    if (rx.indexIn(response) != -1) {
+        return rx.cap(1);
+    }
+    return QString();
 }
 
 void DLNAManager::checkDeviceTimeouts()
@@ -631,8 +542,8 @@ bool DLNAManager::seekTo(qint64 position)
 
 bool DLNAManager::sendUPnPAction(const QString& serviceType, const QString& actionName, const QMap<QString, QString>& arguments)
 {
-    if (!m_connected && !m_devices.contains(m_currentDeviceId)) {
-        qDebug() << "未连接到设备或设备无效";
+    if (!m_devices.contains(m_currentDeviceId)) {
+        qDebug() << "设备无效";
         return false;
     }
 
@@ -644,6 +555,17 @@ bool DLNAManager::sendUPnPAction(const QString& serviceType, const QString& acti
     
     // 构建控制URL
     QUrl controlUrl(device.location);
+    QString controlPath = controlUrl.path();
+    
+    // 确保控制路径包含 "control"
+    if (!controlPath.contains("control", Qt::CaseInsensitive)) {
+        if (!controlPath.endsWith('/')) {
+            controlPath += '/';
+        }
+        controlPath += "control";
+        controlUrl.setPath(controlPath);
+    }
+    
     qDebug() << "发送UPnP动作到:" << controlUrl.toString();
     
     // 构建SOAP消息
@@ -666,8 +588,9 @@ bool DLNAManager::sendUPnPAction(const QString& serviceType, const QString& acti
     QNetworkRequest request(controlUrl);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "text/xml; charset=\"utf-8\"");
     request.setRawHeader("SOAPAction", QString("\"%1#%2\"").arg(serviceType, actionName).toUtf8());
-    request.setRawHeader("Connection", "close");
+    request.setRawHeader("Connection", "keep-alive");  // 修改为 keep-alive
     request.setRawHeader("Content-Length", QString::number(soapBody.toUtf8().length()).toUtf8());
+    request.setRawHeader("User-Agent", "YinYue/1.0");  // 添加 User-Agent
 
     qDebug() << "发送SOAP消息:" << soapBody;
     QNetworkReply* reply = m_networkManager->post(request, soapBody.toUtf8());
@@ -681,32 +604,44 @@ bool DLNAManager::sendUPnPAction(const QString& serviceType, const QString& acti
     timer.start(5000);  // 5秒超时
     loop.exec();
 
-    bool success = (reply->error() == QNetworkReply::NoError);
-    if (!success) {
-        qDebug() << "UPnP动作失败:" << reply->errorString();
-        emit error(reply->errorString());
-    } else {
-        qDebug() << "UPnP��作成功:" << actionName;
-        QByteArray response = reply->readAll();
-        qDebug() << "响应内容:" << response;
-        
-        // 解析响应
-        if (response.contains("GetTransportInfoResponse")) {
-            // 解析播放状态
-            QString currentState;
-            if (response.contains("<CurrentTransportState>")) {
-                int start = response.indexOf("<CurrentTransportState>") + 21;
-                int end = response.indexOf("</CurrentTransportState>");
-                if (start > 0 && end > start) {
-                    currentState = response.mid(start, end - start);
-                    emit playbackStateChanged(currentState);
+    if (timer.isActive()) {
+        timer.stop();
+        bool success = (reply->error() == QNetworkReply::NoError);
+        if (!success) {
+            qDebug() << "UPnP动作失败:" << reply->errorString() 
+                     << "\nHTTP状态码:" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()
+                     << "\n错误类型:" << reply->error();
+            emit error(reply->errorString());
+        } else {
+            qDebug() << "UPnP动作成功:" << actionName;
+            QByteArray response = reply->readAll();
+            qDebug() << "响应内容:" << response;
+            
+            // 解析响应
+            if (response.contains("GetTransportInfoResponse")) {
+                // 解析播放状态
+                QString currentState;
+                if (response.contains("<CurrentTransportState>")) {
+                    int start = response.indexOf("<CurrentTransportState>") + 21;
+                    int end = response.indexOf("</CurrentTransportState>");
+                    if (start > 0 && end > start) {
+                        currentState = response.mid(start, end - start);
+                        m_lastResponse["CurrentTransportState"] = currentState;
+                        emit playbackStateChanged(currentState);
+                    }
                 }
             }
+            success = true;
         }
+        reply->deleteLater();
+        return success;
+    } else {
+        qDebug() << "UPnP动作超时";
+        reply->abort();
+        reply->deleteLater();
+        emit error("Connection timeout");
+        return false;
     }
-
-    reply->deleteLater();
-    return success;
 }
 
 void DLNAManager::handleUPnPResponse(QNetworkReply* reply)
