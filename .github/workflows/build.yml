@@ -9,6 +9,9 @@ on:
     types: [created]
 
 jobs:
+#   macos:
+#     uses: ./.github/workflows/build-macos.yml
+
   linux:
     uses: ./.github/workflows/build-linux.yml
 
@@ -18,7 +21,7 @@ jobs:
   collect-artifacts:
     needs: [linux, windows]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master' && startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'release'
     
     steps:
     - name: Download All Artifacts
@@ -34,5 +37,6 @@ jobs:
         files: |
           artifacts/*.deb
           artifacts/*.exe
+          artifacts/*.dmg
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
