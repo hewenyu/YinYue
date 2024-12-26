@@ -1,0 +1,64 @@
+name: Build Windows
+
+on:
+  workflow_call:
+    outputs:
+      artifact-name:
+        description: "The name of the uploaded artifact"
+        value: YinYue-windows
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '5.15.2'
+        host: windows
+        target: 'desktop'
+        arch: win64_msvc2019_64
+        cache: true
+        setup-python: false
+        tools: 'tools_ifw tools_qtcreator,qt.tools.qtcreator'
+        extra: '--external 7z'
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v1.1
+
+    - name: Install Dependencies
+      shell: bash
+      run: |
+        choco install ninja cmake
+        echo "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build" >> $GITHUB_PATH
+
+    - name: Configure CMake
+      shell: bash
+      run: |
+        mkdir -p build
+        cd build
+        cmake -GNinja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl ..
+      env:
+        CMAKE_PREFIX_PATH: ${{ runner.workspace }}/Qt/5.15.2/msvc2019_64
+
+    - name: Build
+      shell: bash
+      run: |
+        cd build
+        ninja
+
+    - name: Package
+      shell: bash
+      run: |
+        cd build
+        cpack -G NSIS
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: YinYue-windows
+        path: build/*.exe
+        retention-days: 1 

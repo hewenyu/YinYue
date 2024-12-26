@@ -1,0 +1,67 @@
+name: Build macOS
+
+on:
+  workflow_call:
+    outputs:
+      artifact-name:
+        description: "The name of the uploaded artifact"
+        value: YinYue-macos
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '5.15.2'
+        host: mac
+        target: 'desktop'
+        arch: clang_64
+        cache: true
+        setup-python: false
+        tools: 'tools_ifw tools_qtcreator,qt.tools.qtcreator'
+        extra: '--external 7z'
+
+    - name: Install Dependencies
+      run: |
+        brew install cmake ninja p7zip imagemagick
+        
+        # 创建并激活虚拟环境
+        python3 -m venv venv
+        source venv/bin/activate
+        python3 -m pip install setuptools wheel
+        python3 -m pip install py7zr==0.20.* aqtinstall==3.1.*
+        
+        # 创建 DMG 资源目录
+        mkdir -p resources
+        
+        # 创建一个简单的背景图片
+        convert -size 540x380 xc:none -draw "roundrectangle 20,20 520,360 20,20" \
+                -fill white -stroke '#666666' resources/dmg_background.png
+
+    - name: Configure CMake
+      run: |
+        mkdir -p build
+        cd build
+        cmake -GNinja ..
+
+    - name: Build
+      run: |
+        cd build
+        ninja
+
+    - name: Package
+      run: |
+        cd build
+        cpack -G DragNDrop
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: YinYue-macos
+        path: build/*.dmg
+        retention-days: 1 

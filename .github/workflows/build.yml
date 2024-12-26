@@ -9,140 +9,34 @@ on:
     types: [created]
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        include:
-          - os: ubuntu-latest
-            qt_arch: gcc_64
-            artifact_name: YinYue-linux
-            package_type: DEB
-            qt_host: linux
-          - os: windows-latest
-            qt_arch: win64_msvc2019_64
-            artifact_name: YinYue-windows
-            package_type: NSIS
-            qt_host: windows
-          - os: macos-latest
-            qt_arch: clang_64
-            artifact_name: YinYue-macos
-            package_type: DMG
-            qt_host: mac
+  macos:
+    uses: ./.github/workflows/build-macos.yml
 
-    runs-on: ${{ matrix.os }}
+  linux:
+    uses: ./.github/workflows/build-linux.yml
 
+  windows:
+    uses: ./.github/workflows/build-windows.yml
+
+  collect-artifacts:
+    needs: [macos, linux, windows]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    
     steps:
-    - uses: actions/checkout@v4
-
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
+    - name: Download All Artifacts
+      uses: actions/download-artifact@v4
       with:
-        version: '5.15.2'
-        host: ${{ matrix.qt_host }}
-        target: 'desktop'
-        arch: ${{ matrix.qt_arch }}
-        cache: true
-        setup-python: false
-        tools: 'tools_ifw tools_qtcreator,qt.tools.qtcreator'
-        extra: '--external 7z'
-        
-    # Linux 依赖安装
-    - name: Install Linux Dependencies
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake ninja-build \
-          libunwind-dev libgl1-mesa-dev \
-          libpulse-dev libasound2-dev \
-          libgstreamer1.0-dev \
-          libgstreamer-plugins-base1.0-dev \
-          gstreamer1.0-plugins-base \
-          gstreamer1.0-plugins-good \
-          gstreamer1.0-plugins-bad \
-          gstreamer1.0-plugins-ugly \
-          gstreamer1.0-libav \
-          qtbase5-dev \
-          qtmultimedia5-dev \
-          qttools5-dev \
-          qttools5-dev-tools \
-          libqt5multimedia5-plugins
+        path: artifacts
+        pattern: YinYue-*
+        merge-multiple: true
 
-    # Windows 依赖安装
-    - name: Setup Windows Dependencies
-      if: runner.os == 'Windows'
-      uses: microsoft/setup-msbuild@v1.1
-
-    - name: Install Windows Build Tools
-      if: runner.os == 'Windows'
-      run: |
-        choco install ninja cmake
-        echo "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build" >> $GITHUB_PATH
-      shell: bash
-
-    # macOS 依赖安装
-    - name: Install macOS Dependencies
-      if: runner.os == 'macOS'
-      run: |
-        brew install cmake ninja
-
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: '5.15.2'
-        host: ${{ matrix.qt_host }}
-        target: 'desktop'
-        arch: ${{ matrix.qt_arch }}
-        cache: true
-        setup-python: false
-        extra: '--external 7z'
-
-    - name: Configure CMake (Windows)
-      if: runner.os == 'Windows'
-      shell: bash
-      run: |
-        mkdir -p build
-        cd build
-        cmake -GNinja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl ..
-      env:
-        CMAKE_PREFIX_PATH: ${{ runner.workspace }}/Qt/5.15.2/msvc2019_64
-
-    - name: Configure CMake (Unix)
-      if: runner.os != 'Windows'
-      shell: bash
-      run: |
-        mkdir -p build
-        cd build
-        cmake -GNinja ..
-
-    - name: Build
-      shell: bash
-      run: |
-        cd build
-        ninja
-
-    - name: Package
-      shell: bash
-      run: |
-        cd build
-        cpack -G ${{ matrix.package_type }}
-
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ matrix.artifact_name }}
-        path: |
-          build/*.deb
-          build/*.exe
-          build/*.dmg
-
-    - name: Upload Release Asset
-      if: github.event_name == 'release'
+    - name: Upload Release Assets
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          build/*.deb
-          build/*.exe
-          build/*.dmg
+          artifacts/*.deb
+          artifacts/*.exe
+          artifacts/*.dmg
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
