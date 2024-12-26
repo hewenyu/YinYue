@@ -1,87 +1,75 @@
-name: Build Windows
+name: Windows Build
 
 on:
-  workflow_call:
-    outputs:
-      artifact-name:
-        description: "The name of the uploaded artifact"
-        value: YinYue-windows
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  BUILD_TYPE: Release
 
 jobs:
-  build-windows:
-    strategy:
-      matrix:
-        arch: [x64]
-        include:
-          - arch: x64
-            qt_arch: win64_msvc2019_64
-            msvc_arch: x64
-    
+  build:
     runs-on: windows-latest
-    
+
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
+    - name: Cache vcpkg
+      uses: actions/cache@v3
       with:
-        version: '5.15.2'
-        host: windows
-        target: 'desktop'
-        arch: ${{ matrix.qt_arch }}
-        cache: true
-        setup-python: false
-        tools: 'tools_ifw tools_qtcreator,qt.tools.qtcreator'
-        extra: '--external 7z'
+        path: |
+          C:/vcpkg
+          !C:/vcpkg/buildtrees
+          !C:/vcpkg/packages
+          !C:/vcpkg/downloads
+        key: vcpkg-${{ runner.os }}-${{ hashFiles('**/vcpkg.json') }}
+
+    - name: Setup vcpkg
+      run: |
+        git clone https://github.com/Microsoft/vcpkg.git C:/vcpkg
+        C:/vcpkg/bootstrap-vcpkg.bat
+        C:/vcpkg/vcpkg integrate install
+
+    - name: Install Qt (static)
+      run: |
+        C:/vcpkg/vcpkg install qt5-base:x64-windows-static qt5-multimedia:x64-windows-static qt5-tools:x64-windows-static
 
     - name: Setup MSVC
-      uses: microsoft/setup-msbuild@v1.1
-
-    - name: Install Dependencies
-      shell: bash
-      run: |
-        choco install ninja cmake
-
-    - name: Setup MSVC Environment
       uses: ilammy/msvc-dev-cmd@v1
       with:
-        arch: ${{ matrix.msvc_arch }}
+        arch: x64
+
+    - name: Install Ninja
+      run: |
+        choco install ninja
 
     - name: Configure CMake
-      shell: bash
+      shell: pwsh
       run: |
-        mkdir -p build
-        cmake -GNinja \
-          -DCMAKE_C_COMPILER=cl.exe \
-          -DCMAKE_CXX_COMPILER=cl.exe \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} \
-          .
-      env:
-        CMAKE_PREFIX_PATH: ${{ runner.workspace }}/Qt/5.15.2/${{ matrix.qt_arch }}
+        cmake -B ${{github.workspace}}/build `
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} `
+          -G "Ninja" `
+          -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake `
+          -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+          -DBUILD_SHARED_LIBS=OFF
 
     - name: Build
-      shell: bash
+      shell: pwsh
       run: |
-        ninja
+        cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
 
-    - name: Deploy Qt Dependencies
-      shell: bash
+    - name: Create Release Package
+      shell: pwsh
       run: |
-        windeployqt --release --no-translations --no-plugins --no-opengl-sw YinYue.exe
-
-    - name: Create Release Directory
-      shell: bash
-      run: |
-        ls build
-        mkdir -p release
-        cp build/YinYue.exe release/
-        cp build/*.dll release/
+        New-Item -ItemType Directory -Force -Path release\YinYue
+        Copy-Item build\bin\YinYue.exe release\YinYue\
+        Copy-Item README.md release\YinYue\
+        Compress-Archive -Path release\YinYue -DestinationPath release\YinYue-windows-x64.zip -Force
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
-        name: YinYue-windows-${{ matrix.arch }}
-        path: release
-        retention-days: 1 
+        name: YinYue-windows
+        path: release/YinYue-windows-x64.zip 
