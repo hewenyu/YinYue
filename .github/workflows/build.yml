@@ -18,14 +18,17 @@ jobs:
             qt_arch: gcc_64
             artifact_name: YinYue-linux
             package_type: DEB
+            qt_host: linux
           - os: windows-latest
             qt_arch: win64_msvc2019_64
             artifact_name: YinYue-windows
             package_type: NSIS
+            qt_host: windows
           - os: macos-latest
             qt_arch: clang_64
             artifact_name: YinYue-macos
             package_type: DMG
+            qt_host: mac
 
     runs-on: ${{ matrix.os }}
 
@@ -36,7 +39,7 @@ jobs:
       uses: jurplel/install-qt-action@v3
       with:
         version: '5.15.2'
-        host: ${{ runner.os }}
+        host: ${{ matrix.qt_host }}
         target: 'desktop'
         arch: ${{ matrix.qt_arch }}
         cache: true
