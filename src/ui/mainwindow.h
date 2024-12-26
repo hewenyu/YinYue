@@ -7,6 +7,7 @@
 #include <QFileSystemWatcher>
 #include <QTimer>
 #include <QCloseEvent>
+#include <QListWidgetItem>
 #include "core/musicplayer.h"
 #include "models/playlist.h"
 #include "models/lyric.h"
@@ -62,6 +63,16 @@ private slots:
     void on_playModeButton_clicked();
     void updatePlayModeButton(Playlist::PlayMode mode);
 
+    // DLNA 相关槽
+    void on_dlnaButton_toggled(bool checked);
+    void on_refreshDLNAButton_clicked();
+    void on_disconnectDLNAButton_clicked();
+    void on_dlnaDeviceList_itemDoubleClicked(QListWidgetItem *item);
+    void handleDLNADeviceDiscovered(const QString& deviceId, const QString& deviceName);
+    void handleDLNADeviceLost(const QString& deviceId);
+    void handleDLNAConnectionStateChanged(bool connected);
+    void handleDLNAError(const QString& error);
+
 private:
     void setupConnections();
     void updateTimeLabel(QLabel *label, qint64 time);
@@ -86,6 +97,12 @@ private:
 
     void updatePlayModeIcon();  // 更新播放模式按钮图标
     QString getPlayModeText(Playlist::PlayMode mode);  // 获取播放模式文本描述
+
+    // DLNA 相关成员
+    void setupDLNAConnections();
+    void updateDLNADeviceList();
+    void clearDLNADeviceList();
+    QMap<QString, QString> m_dlnaDeviceMap;  // deviceId -> deviceName
 
 private:
     Ui::MainWindow *ui;

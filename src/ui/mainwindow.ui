@@ -23,7 +23,67 @@
       <widget class="QWidget" name="leftWidget" native="true">
        <layout class="QVBoxLayout" name="verticalLayout">
         <item>
-         <widget class="QListWidget" name="libraryWidget"/>
+         <layout class="QHBoxLayout" name="libraryHeaderLayout">
+          <item>
+           <widget class="QLabel" name="libraryLabel">
+            <property name="text">
+             <string>音乐库</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="dlnaButton">
+            <property name="text">
+             <string>DLNA</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QStackedWidget" name="libraryStack">
+          <property name="currentIndex">
+           <number>0</number>
+          </property>
+          <widget class="QWidget" name="localPage">
+           <layout class="QVBoxLayout" name="verticalLayout_4">
+            <item>
+             <widget class="QListWidget" name="libraryWidget"/>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="dlnaPage">
+           <layout class="QVBoxLayout" name="verticalLayout_5">
+            <item>
+             <widget class="QListWidget" name="dlnaDeviceList"/>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="dlnaButtonLayout">
+              <item>
+               <widget class="QPushButton" name="refreshDLNAButton">
+                <property name="text">
+                 <string>刷新设备</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="disconnectDLNAButton">
+                <property name="text">
+                 <string>断开连接</string>
+                </property>
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+         </widget>
         </item>
        </layout>
       </widget>

@@ -28,6 +28,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_player->setPlaylist(m_playlist);
     
     setupConnections();
+    setupDLNAConnections();
     
     // 设置进度条更新定时器
     m_progressTimer->setInterval(100);  // 100ms更新一次
@@ -122,6 +123,106 @@ void MainWindow::setupConnections()
     
     // 连接播放模式信号
     connect(m_player, &MusicPlayer::playModeChanged, this, &MainWindow::updatePlayModeButton);
+    
+    setupDLNAConnections();
+}
+
+void MainWindow::setupDLNAConnections()
+{
+    // 连接 DLNA 信号
+    connect(m_player, &MusicPlayer::dlnaDeviceDiscovered,
+            this, &MainWindow::handleDLNADeviceDiscovered);
+    connect(m_player, &MusicPlayer::dlnaDeviceLost,
+            this, &MainWindow::handleDLNADeviceLost);
+    connect(m_player, &MusicPlayer::dlnaConnectionStateChanged,
+            this, &MainWindow::handleDLNAConnectionStateChanged);
+    connect(m_player, &MusicPlayer::dlnaError,
+            this, &MainWindow::handleDLNAError);
+}
+
+void MainWindow::on_dlnaButton_toggled(bool checked)
+{
+    if (checked) {
+        ui->libraryStack->setCurrentIndex(1);  // 切换到 DLNA 页面
+        m_player->startDLNADiscovery();
+    } else {
+        ui->libraryStack->setCurrentIndex(0);  // 切换回本地文件页面
+        m_player->stopDLNADiscovery();
+        if (m_player->isDLNAConnected()) {
+            m_player->disconnectFromDLNADevice();
+        }
+    }
+}
+
+void MainWindow::on_refreshDLNAButton_clicked()
+{
+    clearDLNADeviceList();
+    m_player->startDLNADiscovery();
+}
+
+void MainWindow::on_disconnectDLNAButton_clicked()
+{
+    if (m_player->isDLNAConnected()) {
+        m_player->disconnectFromDLNADevice();
+    }
+}
+
+void MainWindow::on_dlnaDeviceList_itemDoubleClicked(QListWidgetItem *item)
+{
+    if (!item) return;
+
+    QString deviceId = item->data(Qt::UserRole).toString();
+    if (!deviceId.isEmpty()) {
+        if (m_player->connectToDLNADevice(deviceId)) {
+            ui->disconnectDLNAButton->setEnabled(true);
+        }
+    }
+}
+
+void MainWindow::handleDLNADeviceDiscovered(const QString& deviceId, const QString& deviceName)
+{
+    // 添加或更新设备列表
+    m_dlnaDeviceMap[deviceId] = deviceName;
+    updateDLNADeviceList();
+}
+
+void MainWindow::handleDLNADeviceLost(const QString& deviceId)
+{
+    // 从设备列表中移除
+    m_dlnaDeviceMap.remove(deviceId);
+    updateDLNADeviceList();
+}
+
+void MainWindow::handleDLNAConnectionStateChanged(bool connected)
+{
+    ui->disconnectDLNAButton->setEnabled(connected);
+    
+    if (!connected) {
+        // 如果断开连接，更新界面状态
+        ui->dlnaButton->setChecked(false);
+        ui->libraryStack->setCurrentIndex(0);
+    }
+}
+
+void MainWindow::handleDLNAError(const QString& error)
+{
+    QMessageBox::warning(this, tr("DLNA错误"), error);
+}
+
+void MainWindow::updateDLNADeviceList()
+{
+    ui->dlnaDeviceList->clear();
+    
+    for (auto it = m_dlnaDeviceMap.constBegin(); it != m_dlnaDeviceMap.constEnd(); ++it) {
+        QListWidgetItem *item = new QListWidgetItem(it.value(), ui->dlnaDeviceList);
+        item->setData(Qt::UserRole, it.key());  // 存储设备ID
+    }
+}
+
+void MainWindow::clearDLNADeviceList()
+{
+    ui->dlnaDeviceList->clear();
+    m_dlnaDeviceMap.clear();
 }
 
 void MainWindow::onDirectoryChanged(const QString &path)
@@ -293,7 +394,7 @@ void MainWindow::loadLyric(const QString &musicFilePath)
     QString baseName = musicFile.completeBaseName();
     QString lrcPath = musicFile.absolutePath() + QDir::separator() + baseName + ".lrc";
     
-    qDebug() << "尝试加载��词文件:" << lrcPath;
+    qDebug() << "尝试加载歌词文件:" << lrcPath;
     QFileInfo lrcFile(lrcPath);
     
     if (lrcFile.exists()) {
@@ -480,7 +581,7 @@ void MainWindow::on_removeSelectedButton_clicked()
         m_player->setSource(QUrl());  // 清除当前媒体
         
         // 清除当前播放信息
-        ui->titleLabel->setText(tr("���知歌曲"));
+        ui->titleLabel->setText(tr("未知歌曲"));
         ui->artistLabel->setText(tr("未知艺术家"));
         setWindowTitle(tr("音乐播放器"));
         
@@ -513,7 +614,7 @@ void MainWindow::on_playButton_clicked()
         m_player->pause();
     } else {
         if (m_playlist->currentIndex() == -1 && m_playlist->count() > 0) {
-            // 如果没有选中的歌曲但播放列表不为空，播放第一首
+            // 如果没有选中的歌曲但播放��表不为空，播放第一首
             m_playlist->setCurrentIndex(0);
             MusicFile currentFile = m_playlist->at(0);
             updateCurrentSong(currentFile, true);  // 开始播放时完整更新
@@ -786,7 +887,7 @@ void MainWindow::updatePlayModeButton(Playlist::PlayMode mode)
 {
     QString modeText = getPlayModeText(mode);
     ui->playModeButton->setText(modeText);
-    ui->playModeButton->setToolTip(tr("当前播放���式：%1").arg(modeText));
+    ui->playModeButton->setToolTip(tr("当前播放模式：%1").arg(modeText));
 }
 
 QString MainWindow::getPlayModeText(Playlist::PlayMode mode)

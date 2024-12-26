@@ -7,6 +7,7 @@
 #include <QMediaContent>
 #include <QEventLoop>
 #include "models/playlist.h"
+#include "core/dlnamanager.h"
 
 class MusicPlayer : public QObject
 {
@@ -14,6 +15,15 @@ class MusicPlayer : public QObject
 public:
     explicit MusicPlayer(QObject *parent = nullptr);
     ~MusicPlayer();
+
+    // DLNA 相关功能
+    void startDLNADiscovery();
+    void stopDLNADiscovery();
+    QList<DLNAManager::DLNADevice> getAvailableDLNADevices() const;
+    bool connectToDLNADevice(const QString& deviceId);
+    void disconnectFromDLNADevice();
+    bool isDLNAConnected() const;
+    QString getCurrentDLNADevice() const;
 
     // 基本控制函数
     void play();
@@ -43,6 +53,7 @@ public slots:
 private slots:
     void onMediaStatusChanged(QMediaPlayer::MediaStatus status);
     void onStateChanged(QMediaPlayer::State state);
+    void onDLNAPlaybackStateChanged(const QString& state);
 
 signals:
     void stateChanged(QMediaPlayer::State state);
@@ -53,6 +64,12 @@ signals:
     void playModeChanged(Playlist::PlayMode mode);
     void errorOccurred(const QString &error);
     void currentSongChanged(int index);
+    
+    // DLNA 相关信号
+    void dlnaDeviceDiscovered(const QString& deviceId, const QString& deviceName);
+    void dlnaDeviceLost(const QString& deviceId);
+    void dlnaConnectionStateChanged(bool connected);
+    void dlnaError(const QString& error);
 
 private:
     // 辅助函数：等待媒体加载或状态变化
@@ -63,6 +80,13 @@ private:
     QMediaPlayer *m_player;
     Playlist *m_playlist;
     QEventLoop *m_eventLoop;
+    
+    // DLNA 相关私有成员
+    DLNAManager* m_dlnaManager;
+    bool m_useDLNA;
+    QString m_currentDLNADevice;
+    QList<DLNAManager::DLNADevice> m_availableDLNADevices;
+    bool m_dlnaConnected;
 };
 
 #endif // MUSICPLAYER_H 
