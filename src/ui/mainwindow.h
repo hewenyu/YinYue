@@ -36,7 +36,6 @@ private slots:
     void on_progressSlider_sliderMoved(int position);
     
     // 文件菜单
-    void on_actionOpenFile_triggered();
     void on_actionOpenFolder_triggered();
     void on_actionExit_triggered();
     
@@ -58,15 +57,18 @@ private slots:
     
     // 歌词更新
     void updateLyric(qint64 position);
+    
+    // 播放模式控制
+    void on_playModeButton_clicked();
+    void updatePlayModeButton(Playlist::PlayMode mode);
 
 private:
     void setupConnections();
     void updateTimeLabel(QLabel *label, qint64 time);
-    void loadFile(const QString &filePath);
     void loadFolder(const QString &folderPath);
     void refreshMusicLibrary();
     void addToPlaylist(const MusicFile &file);
-    void updateCurrentSong(const MusicFile &file);
+    void updateCurrentSong(const MusicFile &file, bool updatePlayer = true);
     void loadLyric(const QString &musicFilePath);
     void adjustLyricFontSize();
     void loadSettings();
@@ -81,6 +83,9 @@ private:
     void restorePlaybackState();    // 恢复播放状态
     void startProgressTimer();      // 启动进度条更新定时器
     void stopProgressTimer();       // 停止进度条更新定时器
+
+    void updatePlayModeIcon();  // 更新播放模式按钮图标
+    QString getPlayModeText(Playlist::PlayMode mode);  // 获取播放模式文本描述
 
 private:
     Ui::MainWindow *ui;

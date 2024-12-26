@@ -148,6 +148,27 @@
       <widget class="QWidget" name="rightWidget" native="true">
        <layout class="QVBoxLayout" name="verticalLayout_3">
         <item>
+         <layout class="QHBoxLayout" name="playlistHeaderLayout">
+          <item>
+           <widget class="QLabel" name="playlistLabel">
+            <property name="text">
+             <string>播放列表</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="playModeButton">
+            <property name="text">
+             <string>顺序</string>
+            </property>
+            <property name="toolTip">
+             <string>当前播放模式：顺序</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
          <widget class="QListWidget" name="playlistWidget"/>
         </item>
         <item>
@@ -187,7 +208,6 @@
     <property name="title">
      <string>文件</string>
     </property>
-    <addaction name="actionOpenFile"/>
     <addaction name="actionOpenFolder"/>
     <addaction name="separator"/>
     <addaction name="actionExit"/>
@@ -195,11 +215,6 @@
    <addaction name="menu"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
-  <action name="actionOpenFile">
-   <property name="text">
-    <string>打开文件</string>
-   </property>
-  </action>
   <action name="actionOpenFolder">
    <property name="text">
     <string>打开文件夹</string>

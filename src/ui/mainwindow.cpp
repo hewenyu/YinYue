@@ -23,6 +23,10 @@ MainWindow::MainWindow(QWidget *parent)
     , m_isUserSeeking(false)
 {
     ui->setupUi(this);
+    
+    // 设置播放器的播放列表
+    m_player->setPlaylist(m_playlist);
+    
     setupConnections();
     
     // 设置进度条更新定时器
@@ -62,6 +66,17 @@ void MainWindow::setupConnections()
     connect(m_player, &MusicPlayer::positionChanged, this, &MainWindow::updatePosition);
     connect(m_player, &MusicPlayer::durationChanged, this, &MainWindow::updateDuration);
     connect(m_player, &MusicPlayer::errorOccurred, this, &MainWindow::handleError);
+    
+    // 连接歌曲改变信号
+    connect(m_player, &MusicPlayer::currentSongChanged, this, [this](int index) {
+        if (index >= 0 && index < m_playlist->count()) {
+            MusicFile currentFile = m_playlist->at(index);
+            updateCurrentSong(currentFile, true);  // 更新歌曲信息和歌词
+        }
+    });
+    
+    // 连接播放列表信号
+    connect(m_playlist, &Playlist::playlistChanged, m_player, &MusicPlayer::onPlaylistChanged);
     
     // 连接文件监控信号
     connect(m_fileWatcher, &QFileSystemWatcher::directoryChanged,
@@ -104,6 +119,9 @@ void MainWindow::setupConnections()
             startProgressTimer();
         }
     });
+    
+    // 连接播放模式信号
+    connect(m_player, &MusicPlayer::playModeChanged, this, &MainWindow::updatePlayModeButton);
 }
 
 void MainWindow::onDirectoryChanged(const QString &path)
@@ -199,38 +217,17 @@ void MainWindow::loadFolder(const QString &folderPath)
     refreshMusicLibrary();
 }
 
-void MainWindow::loadFile(const QString &filePath)
-{
-    qDebug() << "正在加载文件:" << filePath;
-    
-    QFileInfo fileInfo(filePath);
-    if (!fileInfo.exists() || !fileInfo.isReadable() || fileInfo.size() == 0) {
-        qDebug() << "文件无效:" << filePath;
-        return;
-    }
-    
-    // 添加到音乐库
-    MusicFile musicFile(filePath);
-    m_musicLibrary[filePath] = musicFile;
-    
-    // 添加到文件监控
-    if (!m_fileWatcher->files().contains(filePath)) {
-        m_fileWatcher->addPath(filePath);
-    }
-    
-    // 添加到音乐库列表
-    QString displayText = musicFile.title();
-    if (!musicFile.artist().isEmpty()) {
-        displayText = musicFile.artist() + " - " + musicFile.title();
-    }
-    QListWidgetItem *item = new QListWidgetItem(displayText, ui->libraryWidget);
-    item->setToolTip(filePath);
-    
-    qDebug() << "文件加载成功:" << displayText;
-}
-
 void MainWindow::addToPlaylist(const MusicFile &file)
 {
+    // 检查是否已存在
+    for (int i = 0; i < ui->playlistWidget->count(); ++i) {
+        QListWidgetItem *item = ui->playlistWidget->item(i);
+        if (item->toolTip() == file.filePath()) {
+            // 文件已存在，不重复添加
+            return;
+        }
+    }
+    
     // 添加到播放列表
     m_playlist->addFile(file);
     
@@ -242,15 +239,17 @@ void MainWindow::addToPlaylist(const MusicFile &file)
     QListWidgetItem *item = new QListWidgetItem(displayText, ui->playlistWidget);
     item->setToolTip(file.filePath());
     
-    // 如果是第一首添加的歌曲，自动选中
-    if (ui->playlistWidget->count() == 1) {
+    // 仅当播放列表为空且没有正在播放的音乐时，才自动选中并播放
+    if (ui->playlistWidget->count() == 1 && !m_isPlaying) {
         ui->playlistWidget->setCurrentItem(item);
         m_playlist->setCurrentIndex(0);
-        updateCurrentSong(file);
+        updateCurrentSong(file, true);  // 第一首歌时完整更新
+        m_player->setSource(file.fileUrl());
+        m_player->play();
     }
 }
 
-void MainWindow::updateCurrentSong(const MusicFile &file)
+void MainWindow::updateCurrentSong(const MusicFile &file, bool updatePlayer)
 {
     // 更新标题和艺术家信息
     QString title = file.title();
@@ -270,14 +269,17 @@ void MainWindow::updateCurrentSong(const MusicFile &file)
             font.setBold(true);
             item->setFont(font);
             ui->playlistWidget->setCurrentItem(item);
+            ui->playlistWidget->scrollToItem(item);  // 确保当前播放的歌曲可见
         } else {
             font.setBold(false);
             item->setFont(font);
         }
     }
     
-    // 加载歌词
-    loadLyric(file.filePath());
+    // 只在需要时加载歌词
+    if (updatePlayer) {
+        loadLyric(file.filePath());
+    }
 }
 
 void MainWindow::loadLyric(const QString &musicFilePath)
@@ -291,7 +293,7 @@ void MainWindow::loadLyric(const QString &musicFilePath)
     QString baseName = musicFile.completeBaseName();
     QString lrcPath = musicFile.absolutePath() + QDir::separator() + baseName + ".lrc";
     
-    qDebug() << "尝试加载歌词文件:" << lrcPath;
+    qDebug() << "尝试加载��词文件:" << lrcPath;
     QFileInfo lrcFile(lrcPath);
     
     if (lrcFile.exists()) {
@@ -353,7 +355,7 @@ void MainWindow::updateLyric(qint64 position)
         // 获取基础字体大小
         int baseFontSize = ui->lyricEdit->font().pointSize();
         
-        // 构建显示文本，使用相对字体大小
+        // 构建显示文本，使用对字体大小
         QString displayText;
         
         // 前两行歌词（较暗）
@@ -370,7 +372,7 @@ void MainWindow::updateLyric(qint64 position)
                 .arg(prevLyric2);
         }
         
-        // 当前歌词（大号加粗）
+        // 当前词（大号加粗）
         displayText += QString("<p style='margin: %1px; color: #333333; font-size: %2px; font-weight: bold;'>%3</p>")
             .arg(baseFontSize)
             .arg(baseFontSize * 1.5)
@@ -428,7 +430,7 @@ void MainWindow::on_playlistWidget_doubleClicked(const QModelIndex &index)
     
     m_playlist->setCurrentIndex(row);
     MusicFile currentFile = m_playlist->at(row);
-    updateCurrentSong(currentFile);
+    updateCurrentSong(currentFile, true);  // 双击播放时完整更新
     
     m_player->setSource(currentFile.fileUrl());
     m_player->play();
@@ -438,15 +440,70 @@ void MainWindow::on_clearPlaylistButton_clicked()
 {
     ui->playlistWidget->clear();
     m_playlist->clear();
+    
+    // 清除当前播放信息
+    ui->titleLabel->setText(tr("未知歌曲"));
+    ui->artistLabel->setText(tr("未知艺术家"));
+    setWindowTitle(tr("音乐播放器"));
+    
+    // 清除歌词显示
+    ui->lyricEdit->clear();
+    m_lyric->clear();
+    
+    // 重置进度条和时间标签
+    ui->progressSlider->setValue(0);
+    ui->progressSlider->setMaximum(0);
+    updateTimeLabel(ui->currentTimeLabel, 0);
+    updateTimeLabel(ui->totalTimeLabel, 0);
 }
 
 void MainWindow::on_removeSelectedButton_clicked()
 {
     QList<QListWidgetItem*> items = ui->playlistWidget->selectedItems();
+    bool removedCurrentSong = false;
+    int currentIndex = m_playlist->currentIndex();
+    
     for (QListWidgetItem *item : items) {
         int row = ui->playlistWidget->row(item);
+        // 检查是否移除了当前播放的歌曲
+        if (row == currentIndex) {
+            removedCurrentSong = true;
+        }
         m_playlist->removeFile(row);
         delete item;
+    }
+    
+    // 如果移除了当前播放的歌曲，或播放列表已空
+    if (removedCurrentSong || m_playlist->count() == 0) {
+        // 停止播放
+        m_player->stop();
+        m_player->setSource(QUrl());  // 清除当前媒体
+        
+        // 清除当前播放信息
+        ui->titleLabel->setText(tr("���知歌曲"));
+        ui->artistLabel->setText(tr("未知艺术家"));
+        setWindowTitle(tr("音乐播放器"));
+        
+        // 清除歌词显示
+        ui->lyricEdit->clear();
+        m_lyric->clear();
+        
+        // 重置进度条和时间标签
+        ui->progressSlider->setValue(0);
+        ui->progressSlider->setMaximum(0);
+        updateTimeLabel(ui->currentTimeLabel, 0);
+        updateTimeLabel(ui->totalTimeLabel, 0);
+    }
+    // 如果还有歌曲，且移除了当前播放的歌曲，播放下一首
+    else if (removedCurrentSong && m_playlist->count() > 0) {
+        int nextIndex = m_playlist->nextIndex();
+        if (nextIndex != -1) {
+            m_playlist->setCurrentIndex(nextIndex);
+            MusicFile currentFile = m_playlist->at(nextIndex);
+            updateCurrentSong(currentFile, true);  // 切换到下一首时完整更新
+            m_player->setSource(currentFile.fileUrl());
+            m_player->play();
+        }
     }
 }
 
@@ -459,12 +516,12 @@ void MainWindow::on_playButton_clicked()
             // 如果没有选中的歌曲但播放列表不为空，播放第一首
             m_playlist->setCurrentIndex(0);
             MusicFile currentFile = m_playlist->at(0);
-            updateCurrentSong(currentFile);
+            updateCurrentSong(currentFile, true);  // 开始播放时完整更新
             m_player->setSource(currentFile.fileUrl());
         } else if (m_playlist->currentIndex() >= 0) {
             // 如果有选中的歌曲，更新当前歌曲信息
             MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
-            updateCurrentSong(currentFile);
+            updateCurrentSong(currentFile, true);  // 继续播放时完整更新
         }
         m_player->play();
     }
@@ -476,7 +533,7 @@ void MainWindow::on_previousButton_clicked()
     if (prevIndex != -1) {
         m_playlist->setCurrentIndex(prevIndex);
         MusicFile currentFile = m_playlist->at(prevIndex);
-        updateCurrentSong(currentFile);
+        updateCurrentSong(currentFile, true);  // 切换到上一首时完整更新
         m_player->setSource(currentFile.fileUrl());
         m_player->play();
     }
@@ -488,7 +545,7 @@ void MainWindow::on_nextButton_clicked()
     if (nextIndex != -1) {
         m_playlist->setCurrentIndex(nextIndex);
         MusicFile currentFile = m_playlist->at(nextIndex);
-        updateCurrentSong(currentFile);
+        updateCurrentSong(currentFile, true);  // 切换到下一首时完整更新
         m_player->setSource(currentFile.fileUrl());
         m_player->play();
     }
@@ -502,18 +559,6 @@ void MainWindow::on_volumeSlider_valueChanged(int value)
 void MainWindow::on_progressSlider_sliderMoved(int position)
 {
     m_player->setPosition(position);
-}
-
-void MainWindow::on_actionOpenFile_triggered()
-{
-    QString filePath = QFileDialog::getOpenFileName(this,
-        tr("打开音乐文件"),
-        QStandardPaths::writableLocation(QStandardPaths::MusicLocation),
-        tr("音乐文件 (*.mp3 *.wav *.flac)"));
-        
-    if (!filePath.isEmpty()) {
-        loadFile(filePath);
-    }
 }
 
 void MainWindow::on_actionOpenFolder_triggered()
@@ -642,6 +687,10 @@ void MainWindow::loadSettings()
             m_player->play();
         }
     }
+    
+    // 加载播放模式
+    int playMode = settings.value("playMode", static_cast<int>(Playlist::Sequential)).toInt();
+    m_player->setPlayMode(static_cast<Playlist::PlayMode>(playMode));
 }
 
 void MainWindow::saveSettings()
@@ -668,6 +717,9 @@ void MainWindow::saveSettings()
     settings.setValue("currentIndex", m_playlist->currentIndex());
     settings.setValue("position", m_player->position());
     settings.setValue("isPlaying", m_isPlaying);
+    
+    // 保存播放模式
+    settings.setValue("playMode", static_cast<int>(m_player->playMode()));
     
     settings.sync();
 }
@@ -723,5 +775,33 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     savePlaybackState();
     QMainWindow::closeEvent(event);
+}
+
+void MainWindow::on_playModeButton_clicked()
+{
+    m_player->togglePlayMode();
+}
+
+void MainWindow::updatePlayModeButton(Playlist::PlayMode mode)
+{
+    QString modeText = getPlayModeText(mode);
+    ui->playModeButton->setText(modeText);
+    ui->playModeButton->setToolTip(tr("当前播放���式：%1").arg(modeText));
+}
+
+QString MainWindow::getPlayModeText(Playlist::PlayMode mode)
+{
+    switch (mode) {
+        case Playlist::Sequential:
+            return tr("顺序");
+        case Playlist::Random:
+            return tr("随机");
+        case Playlist::RepeatOne:
+            return tr("单曲");
+        case Playlist::RepeatAll:
+            return tr("循环");
+        default:
+            return tr("顺序");
+    }
 }
 
