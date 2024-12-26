@@ -1,42 +1,84 @@
-name: Build and Package
+name: Cross Platform Build
 
 on:
   push:
-    branches: [ master ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ master ]
-  release:
-    types: [created]
+    branches: [ "main" ]
 
-permissions:
-  contents: write
-  packages: write
+env:
+  BUILD_TYPE: Release
 
 jobs:
-#   linux:
-#     uses: ./.github/workflows/build-linux.yml
-
-  windows:
-    uses: ./.github/workflows/build-windows.yml
-
-  collect-artifacts:
-    needs: [windows]
+  build:
     runs-on: ubuntu-latest
-    if: github.event_name == 'release'
-    
-    steps:
-    - name: Download All Artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: artifacts
-        pattern: YinYue-*
-        merge-multiple: true
+    strategy:
+      matrix:
+        target: [
+          { name: 'windows', triple: 'x86_64-windows-gnu' },
+          { name: 'linux', triple: 'x86_64-linux-gnu' },
+          { name: 'macos', triple: 'x86_64-macos-gnu' }
+        ]
 
-    - name: Upload Release Assets
-      uses: softprops/action-gh-release@v1
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Zig
+      uses: goto-bus-stop/setup-zig@v2
       with:
-        files: |
-          artifacts/YinYue-windows-x64.zip
-        #   artifacts/YinYue-linux-x64.tar.gz
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        version: 0.11.0
+
+    - name: Cache vcpkg
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/vcpkg
+          !~/vcpkg/buildtrees
+          !~/vcpkg/packages
+          !~/vcpkg/downloads
+        key: vcpkg-${{ matrix.target.name }}-${{ hashFiles('**/vcpkg.json') }}
+
+    - name: Setup vcpkg
+      run: |
+        git clone https://github.com/Microsoft/vcpkg.git ~/vcpkg
+        ~/vcpkg/bootstrap-vcpkg.sh
+        ~/vcpkg/vcpkg integrate install
+
+    - name: Install Qt5 (static)
+      run: |
+        ~/vcpkg/vcpkg install qt5-base:${{ matrix.target.name }}-static qt5-multimedia:${{ matrix.target.name }}-static qt5-tools:${{ matrix.target.name }}-static
+
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DCMAKE_TOOLCHAIN_FILE=~/vcpkg/scripts/buildsystems/vcpkg.cmake \
+          -DVCPKG_TARGET_TRIPLET=${{ matrix.target.name }}-static \
+          -DCMAKE_C_COMPILER=zig cc -target ${{ matrix.target.triple }} \
+          -DCMAKE_CXX_COMPILER=zig c++ -target ${{ matrix.target.triple }} \
+          -DBUILD_SHARED_LIBS=OFF \
+          -DQT_STATIC=ON
+
+    - name: Build
+      run: cmake --build build --config ${{env.BUILD_TYPE}}
+
+    - name: Create Release Package
+      run: |
+        mkdir -p release/YinYue
+        if [ "${{ matrix.target.name }}" = "windows" ]; then
+          cp build/bin/YinYue.exe release/YinYue/
+          cp README.md release/YinYue/
+          cd release
+          zip -r YinYue-${{ matrix.target.name }}-x64.zip YinYue/
+        else
+          cp build/bin/YinYue release/YinYue/
+          cp README.md release/YinYue/
+          cd release
+          tar -czf YinYue-${{ matrix.target.name }}-x64.tar.gz YinYue/
+        fi
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: YinYue-${{ matrix.target.name }}
+        path: release/YinYue-${{ matrix.target.name }}-x64.* 
