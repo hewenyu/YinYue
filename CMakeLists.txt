@@ -9,6 +9,14 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Windows 静态链接设置
+if(WIN32)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /MANIFEST:NO")
+    add_definitions(-DQT_STATICPLUGIN)
+    set(BUILD_SHARED_LIBS OFF)
+endif()
+
 # macOS 特定设置
 if(APPLE)
     set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64")
@@ -23,6 +31,20 @@ endif()
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools Multimedia MultimediaWidgets Sql)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools Multimedia MultimediaWidgets Sql)
+
+# Windows 静态插件
+if(WIN32)
+    find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core Gui Network)
+    set(QT_PLUGINS
+        Qt${QT_VERSION_MAJOR}::QWindowsIntegrationPlugin
+        Qt${QT_VERSION_MAJOR}::QWindowsVistaStylePlugin
+        Qt${QT_VERSION_MAJOR}::QGifPlugin
+        Qt${QT_VERSION_MAJOR}::QICOPlugin
+        Qt${QT_VERSION_MAJOR}::QJpegPlugin
+        Qt${QT_VERSION_MAJOR}::QWindowsAudioPlugin
+        Qt${QT_VERSION_MAJOR}::QWindowsMediaPlugin
+    )
+endif()
 
 set(TS_FILES YinYue_zh_CN.ts)
 
@@ -77,6 +99,27 @@ target_link_libraries(YinYue PRIVATE
     Qt${QT_VERSION_MAJOR}::MultimediaWidgets
 )
 
+# Windows 静态链接
+if(WIN32)
+    target_link_libraries(YinYue PRIVATE
+        ${QT_PLUGINS}
+        Qt${QT_VERSION_MAJOR}::Core
+        Qt${QT_VERSION_MAJOR}::Gui
+        Qt${QT_VERSION_MAJOR}::Network
+        imm32.lib
+        winmm.lib
+        dwmapi.lib
+        uxtheme.lib
+        version.lib
+        ws2_32.lib
+        iphlpapi.lib
+        userenv.lib
+        netapi32.lib
+        wtsapi32.lib
+        setupapi.lib
+    )
+endif()
+
 # 设置目标属性
 if(APPLE)
     set_target_properties(YinYue PROPERTIES
@@ -106,14 +149,7 @@ if(APPLE)
 elseif(WIN32)
     install(TARGETS YinYue
         RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib/static
     )
-    set(CPACK_GENERATOR "NSIS")
-    set(CPACK_NSIS_PACKAGE_NAME "YinYue")
-    set(CPACK_NSIS_DISPLAY_NAME "YinYue Music Player")
-    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
-    set(CPACK_NSIS_MODIFY_PATH ON)
 else()
     install(TARGETS YinYue
         RUNTIME DESTINATION bin
