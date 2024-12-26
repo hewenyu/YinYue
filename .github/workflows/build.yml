@@ -10,27 +10,40 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            qt_arch: gcc_64
+            artifact_name: YinYue-linux
+            package_type: DEB
+          - os: windows-latest
+            qt_arch: win64_msvc2019_64
+            artifact_name: YinYue-windows
+            package_type: NSIS
+          - os: macos-latest
+            qt_arch: clang_64
+            artifact_name: YinYue-macos
+            package_type: DMG
+
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
-
-    - name: List available Qt modules
-      run: |
-        python3 -m pip install aqtinstall
-        aqt list-qt linux desktop --modules 5.15.2 gcc_64
 
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
       with:
         version: '5.15.2'
-        host: 'linux'
+        host: ${{ runner.os }}
         target: 'desktop'
-        arch: 'gcc_64'
-        tools: 'tools_qtcreator,qt.tools.qtcreator'
+        arch: ${{ matrix.qt_arch }}
         cache: true
 
-    - name: Install Dependencies
+    # Linux 依赖安装
+    - name: Install Linux Dependencies
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get update
         # 首先安装基础开发工具
@@ -56,32 +69,52 @@ jobs:
           qttools5-dev-tools \
           libqt5multimedia5-plugins
 
+    # Windows 依赖安装
+    - name: Setup Windows Dependencies
+      if: runner.os == 'Windows'
+      uses: microsoft/setup-msbuild@v1.1
+
+    # macOS 依赖安装
+    - name: Install macOS Dependencies
+      if: runner.os == 'macOS'
+      run: |
+        brew install cmake ninja
+
     - name: Configure CMake
+      shell: bash
       run: |
         mkdir -p build
         cd build
         cmake -GNinja ..
 
     - name: Build
+      shell: bash
       run: |
         cd build
         ninja
 
     - name: Package
+      shell: bash
       run: |
         cd build
-        cpack -G DEB
+        cpack -G ${{ matrix.package_type }}
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: YinYue-linux
-        path: build/YinYue*.deb
+        name: ${{ matrix.artifact_name }}
+        path: |
+          build/*.deb
+          build/*.exe
+          build/*.dmg
 
     - name: Upload Release Asset
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
-        files: build/YinYue*.deb
+        files: |
+          build/*.deb
+          build/*.exe
+          build/*.dmg
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
