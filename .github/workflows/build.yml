@@ -77,6 +77,20 @@ jobs:
       if: runner.os == 'Windows'
       uses: microsoft/setup-msbuild@v1.1
 
+    - name: Install Windows Build Tools
+      if: runner.os == 'Windows'
+      run: |
+        # 安装 Ninja
+        choco install ninja
+        
+        # 设置 Visual Studio 环境变量
+        echo "Adding Visual Studio Environment Variables"
+        echo "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build" >> $GITHUB_PATH
+        
+        # 安装其他必要工具
+        choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
+      shell: bash
+
     # macOS 依赖安装
     - name: Install macOS Dependencies
       if: runner.os == 'macOS'
@@ -95,7 +109,18 @@ jobs:
       run: |
         mkdir -p build
         cd build
-        cmake -GNinja ..
+        if [ "$RUNNER_OS" == "Windows" ]; then
+          # Windows 特定的 CMake 配置
+          cmake -GNinja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl ..
+        else
+          # Linux 和 macOS 的配置
+          cmake -GNinja ..
+        fi
+      env:
+        # Windows 特定环境变量
+        CMAKE_PREFIX_PATH: ${{ runner.workspace }}/Qt/Qt5.15.2/msvc2019_64
+        CC: cl.exe
+        CXX: cl.exe
 
     - name: Build
       shell: bash
