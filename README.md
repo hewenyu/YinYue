@@ -1,1 +1,3 @@
-cmake . && make
+mkdir build && cd build
+
+cmake .. && make
