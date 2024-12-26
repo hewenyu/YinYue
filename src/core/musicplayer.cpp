@@ -83,4 +83,13 @@ qint64 MusicPlayer::duration() const
 int MusicPlayer::volume() const
 {
     return m_player->volume();
+}
+
+void MusicPlayer::onPlaylistChanged()
+{
+    // 如果播放列表为空，停止播放
+    if (m_player->state() != QMediaPlayer::StoppedState) {
+        stop();
+        m_player->setMedia(QMediaContent());  // 清除当前媒体
+    }
 } 

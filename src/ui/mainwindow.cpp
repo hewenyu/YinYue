@@ -63,6 +63,9 @@ void MainWindow::setupConnections()
     connect(m_player, &MusicPlayer::durationChanged, this, &MainWindow::updateDuration);
     connect(m_player, &MusicPlayer::errorOccurred, this, &MainWindow::handleError);
     
+    // 连接播放列表信号
+    connect(m_playlist, &Playlist::playlistChanged, m_player, &MusicPlayer::onPlaylistChanged);
+    
     // 连接文件监控信号
     connect(m_fileWatcher, &QFileSystemWatcher::directoryChanged,
             this, &MainWindow::onDirectoryChanged);
@@ -231,6 +234,15 @@ void MainWindow::loadFile(const QString &filePath)
 
 void MainWindow::addToPlaylist(const MusicFile &file)
 {
+    // 检查是否已存在
+    for (int i = 0; i < ui->playlistWidget->count(); ++i) {
+        QListWidgetItem *item = ui->playlistWidget->item(i);
+        if (item->toolTip() == file.filePath()) {
+            // 文件已存在，不重复添加
+            return;
+        }
+    }
+    
     // 添加到播放列表
     m_playlist->addFile(file);
     
@@ -370,7 +382,7 @@ void MainWindow::updateLyric(qint64 position)
                 .arg(prevLyric2);
         }
         
-        // 当前歌词（大号加粗）
+        // 当前词（大号加粗）
         displayText += QString("<p style='margin: %1px; color: #333333; font-size: %2px; font-weight: bold;'>%3</p>")
             .arg(baseFontSize)
             .arg(baseFontSize * 1.5)
@@ -438,15 +450,70 @@ void MainWindow::on_clearPlaylistButton_clicked()
 {
     ui->playlistWidget->clear();
     m_playlist->clear();
+    
+    // 清除当前播放信息
+    ui->titleLabel->setText(tr("未知歌曲"));
+    ui->artistLabel->setText(tr("未知艺术家"));
+    setWindowTitle(tr("音乐播放器"));
+    
+    // 清除歌词显示
+    ui->lyricEdit->clear();
+    m_lyric->clear();
+    
+    // 重置进度条和时间标签
+    ui->progressSlider->setValue(0);
+    ui->progressSlider->setMaximum(0);
+    updateTimeLabel(ui->currentTimeLabel, 0);
+    updateTimeLabel(ui->totalTimeLabel, 0);
 }
 
 void MainWindow::on_removeSelectedButton_clicked()
 {
     QList<QListWidgetItem*> items = ui->playlistWidget->selectedItems();
+    bool removedCurrentSong = false;
+    int currentIndex = m_playlist->currentIndex();
+    
     for (QListWidgetItem *item : items) {
         int row = ui->playlistWidget->row(item);
+        // 检查是否移除了当前播放的歌曲
+        if (row == currentIndex) {
+            removedCurrentSong = true;
+        }
         m_playlist->removeFile(row);
         delete item;
+    }
+    
+    // 如果移除了当前播放的歌曲，或播放列表已空
+    if (removedCurrentSong || m_playlist->count() == 0) {
+        // 停止播放
+        m_player->stop();
+        m_player->setSource(QUrl());  // 清除当前媒体
+        
+        // 清除当前播放信息
+        ui->titleLabel->setText(tr("未知歌曲"));
+        ui->artistLabel->setText(tr("未知艺术家"));
+        setWindowTitle(tr("音乐播放器"));
+        
+        // 清除歌词显示
+        ui->lyricEdit->clear();
+        m_lyric->clear();
+        
+        // 重置进度条和时间标签
+        ui->progressSlider->setValue(0);
+        ui->progressSlider->setMaximum(0);
+        updateTimeLabel(ui->currentTimeLabel, 0);
+        updateTimeLabel(ui->totalTimeLabel, 0);
+    }
+    // 如果还有歌曲，且移除了当前播放的歌曲，播放下一首
+    else if (removedCurrentSong && m_playlist->count() > 0) {
+        int nextIndex = m_playlist->nextIndex();
+        if (nextIndex != -1) {
+            m_playlist->setCurrentIndex(nextIndex);
+            MusicFile currentFile = m_playlist->at(nextIndex);
+            updateCurrentSong(currentFile);
+            m_player->setSource(currentFile.fileUrl());
+            m_player->play();
+        }
     }
 }
 
@@ -456,7 +523,7 @@ void MainWindow::on_playButton_clicked()
         m_player->pause();
     } else {
         if (m_playlist->currentIndex() == -1 && m_playlist->count() > 0) {
-            // 如果没有选中的歌曲但播放列表不为空，播放第一首
+            // 如果没有中的歌曲但播放列表不为空，播��第一首
             m_playlist->setCurrentIndex(0);
             MusicFile currentFile = m_playlist->at(0);
             updateCurrentSong(currentFile);

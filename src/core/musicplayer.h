@@ -29,6 +29,9 @@ public:
     qint64 duration() const;
     int volume() const;
 
+    // 处理播放列表变化
+    void onPlaylistChanged();
+
 signals:
     void stateChanged(QMediaPlayer::State state);
     void positionChanged(qint64 position);
