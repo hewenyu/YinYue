@@ -58,6 +58,7 @@ private:
     // 辅助函数：等待媒体加载或状态变化
     bool waitForMediaLoaded(int timeout = 5000);
     bool waitForState(QMediaPlayer::State targetState, int timeout = 5000);
+    bool switchToTrack(int index, const QString& operation);
 
     QMediaPlayer *m_player;
     Playlist *m_playlist;

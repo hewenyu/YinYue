@@ -24,7 +24,7 @@ MusicPlayer::MusicPlayer(QObject *parent)
                 emit errorOccurred(m_player->errorString());
             });
 
-    // 设置默认音量��100
+    // 设置默认音量���100
     m_player->setVolume(100);
 }
 
@@ -200,105 +200,79 @@ void MusicPlayer::stop()
         m_player->stop();
         if (!waitForState(QMediaPlayer::StoppedState)) {
             qDebug() << "Failed to enter stopped state";
-            // 如���停止失败，尝试重置媒体
+            // 如果停止失败，尝试重置媒体
             m_player->setMedia(QMediaContent());
             waitForState(QMediaPlayer::StoppedState);
         }
     }
 }
 
-void MusicPlayer::next()
+bool MusicPlayer::switchToTrack(int index, const QString& operation)
 {
-    qDebug() << "Next track requested, current state:" << m_player->state()
+    qDebug() << operation << "track requested, current state:" << m_player->state()
              << "media status:" << m_player->mediaStatus()
              << "current index:" << (m_playlist ? m_playlist->currentIndex() : -1);
 
     if (!m_playlist || m_playlist->count() == 0) {
-        qDebug() << "Cannot play next: playlist is empty or null";
-        return;
+        qDebug() << "Cannot " << operation << ": playlist is empty or null";
+        return false;
     }
 
+    if (index < 0 || index >= m_playlist->count()) {
+        qDebug() << "No " << operation << " track available";
+        return false;
+    }
+
+    // 先停止当前播放
+    stop();
+    QThread::msleep(500);  // 给一些时间让播放器完全停止
+    
+    qDebug() << "Setting current index to:" << index;
+    m_playlist->setCurrentIndex(index);
+    MusicFile nextFile = m_playlist->at(index);
+    
+    qDebug() << "Loading " << operation << " track:" << nextFile.filePath();
+    m_player->setMedia(QMediaContent(nextFile.fileUrl()));
+    
+    // 等待媒体加载完成
+    if (waitForMediaLoaded()) {
+        qDebug() << operation << " track loaded successfully, starting playback";
+        m_player->play();
+        if (!waitForState(QMediaPlayer::PlayingState)) {
+            qDebug() << "Failed to start playing " << operation << " track";
+            return false;
+        }
+        return true;
+    } else {
+        qDebug() << "Failed to load " << operation << " track";
+        return false;
+    }
+}
+
+void MusicPlayer::next()
+{
     // 如果是第一次播放，设置当前索引为0
-    if (m_playlist->currentIndex() == -1) {
+    if (m_playlist && m_playlist->currentIndex() == -1) {
         qDebug() << "First play, setting current index to 0";
         m_playlist->setCurrentIndex(0);
     }
 
-    int nextIndex = m_playlist->nextIndex();
+    int nextIndex = m_playlist ? m_playlist->nextIndex() : -1;
     qDebug() << "Next index:" << nextIndex;
-    
-    if (nextIndex >= 0) {
-        // 先停止当前播放
-        stop();
-        QThread::msleep(500);  // 给一些时间让播放器完全停止
-        
-        qDebug() << "Setting current index to:" << nextIndex;
-        m_playlist->setCurrentIndex(nextIndex);
-        MusicFile nextFile = m_playlist->at(nextIndex);
-        
-        qDebug() << "Loading next track:" << nextFile.filePath();
-        m_player->setMedia(QMediaContent(nextFile.fileUrl()));
-        
-        // 等待媒体加载完成
-        if (waitForMediaLoaded()) {
-            qDebug() << "Next track loaded successfully, starting playback";
-            m_player->play();
-            if (!waitForState(QMediaPlayer::PlayingState)) {
-                qDebug() << "Failed to start playing next track";
-            }
-        } else {
-            qDebug() << "Failed to load next track";
-        }
-    } else {
-        qDebug() << "No next track available";
-    }
+    switchToTrack(nextIndex, "next");
 }
 
 void MusicPlayer::previous()
 {
-    qDebug() << "Previous track requested, current state:" << m_player->state()
-             << "media status:" << m_player->mediaStatus()
-             << "current index:" << (m_playlist ? m_playlist->currentIndex() : -1);
-
-    if (!m_playlist || m_playlist->count() == 0) {
-        qDebug() << "Cannot play previous: playlist is empty or null";
-        return;
-    }
-
-    // 如果第一次播放，设置当前索引为0
-    if (m_playlist->currentIndex() == -1) {
+    // 如果是第一次播放，设置当前索引为0
+    if (m_playlist && m_playlist->currentIndex() == -1) {
         qDebug() << "First play, setting current index to 0";
         m_playlist->setCurrentIndex(0);
     }
 
-    int prevIndex = m_playlist->previousIndex();
+    int prevIndex = m_playlist ? m_playlist->previousIndex() : -1;
     qDebug() << "Previous index:" << prevIndex;
-    
-    if (prevIndex >= 0) {
-        // 先停止当前播放
-        stop();
-        QThread::msleep(500);  // 给一些时间让播放器完全停止
-        
-        qDebug() << "Setting current index to:" << prevIndex;
-        m_playlist->setCurrentIndex(prevIndex);
-        MusicFile prevFile = m_playlist->at(prevIndex);
-        
-        qDebug() << "Loading previous track:" << prevFile.filePath();
-        m_player->setMedia(QMediaContent(prevFile.fileUrl()));
-        
-        // 等待媒体加载完成
-        if (waitForMediaLoaded()) {
-            qDebug() << "Previous track loaded successfully, starting playback";
-            m_player->play();
-            if (!waitForState(QMediaPlayer::PlayingState)) {
-                qDebug() << "Failed to start playing previous track";
-            }
-        } else {
-            qDebug() << "Failed to load previous track";
-        }
-    } else {
-        qDebug() << "No previous track available";
-    }
+    switchToTrack(prevIndex, "previous");
 }
 
 void MusicPlayer::onStateChanged(QMediaPlayer::State state)
