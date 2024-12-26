@@ -9,9 +9,6 @@ on:
     types: [created]
 
 jobs:
-  macos:
-    uses: ./.github/workflows/build-macos.yml
-
   linux:
     uses: ./.github/workflows/build-linux.yml
 
@@ -19,7 +16,7 @@ jobs:
     uses: ./.github/workflows/build-windows.yml
 
   collect-artifacts:
-    needs: [macos, linux, windows]
+    needs: [linux, windows]
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
     
@@ -37,6 +34,5 @@ jobs:
         files: |
           artifacts/*.deb
           artifacts/*.exe
-          artifacts/*.dmg
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

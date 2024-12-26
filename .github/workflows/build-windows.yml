@@ -9,6 +9,17 @@ on:
 
 jobs:
   build-windows:
+    strategy:
+      matrix:
+        arch: [x64, x86]
+        include:
+          - arch: x64
+            qt_arch: win64_msvc2019_64
+            msvc_arch: x64
+          - arch: x86
+            qt_arch: win32_msvc2019
+            msvc_arch: x86
+    
     runs-on: windows-latest
     
     steps:
@@ -20,7 +31,7 @@ jobs:
         version: '5.15.2'
         host: windows
         target: 'desktop'
-        arch: win64_msvc2019_64
+        arch: ${{ matrix.qt_arch }}
         cache: true
         setup-python: false
         tools: 'tools_ifw tools_qtcreator,qt.tools.qtcreator'
@@ -33,16 +44,26 @@ jobs:
       shell: bash
       run: |
         choco install ninja cmake
-        echo "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build" >> $GITHUB_PATH
+
+    - name: Setup MSVC Environment
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: ${{ matrix.msvc_arch }}
 
     - name: Configure CMake
       shell: bash
       run: |
         mkdir -p build
         cd build
-        cmake -GNinja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl ..
+        cmake -GNinja \
+          -DCMAKE_C_COMPILER=cl.exe \
+          -DCMAKE_CXX_COMPILER=cl.exe \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_SYSTEM_NAME=Windows \
+          -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} \
+          ..
       env:
-        CMAKE_PREFIX_PATH: ${{ runner.workspace }}/Qt/5.15.2/msvc2019_64
+        CMAKE_PREFIX_PATH: ${{ runner.workspace }}/Qt/5.15.2/${{ matrix.qt_arch }}
 
     - name: Build
       shell: bash
@@ -59,6 +80,6 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: YinYue-windows
+        name: YinYue-windows-${{ matrix.arch }}
         path: build/*.exe
         retention-days: 1 

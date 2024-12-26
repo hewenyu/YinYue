@@ -9,6 +9,17 @@ on:
 
 jobs:
   build-linux:
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            qt_arch: gcc_64
+            platform: x86_64-linux-gnu
+          - arch: arm64
+            qt_arch: gcc_arm64
+            platform: aarch64-linux-gnu
+    
     runs-on: ubuntu-latest
     
     steps:
@@ -20,7 +31,7 @@ jobs:
         version: '5.15.2'
         host: linux
         target: 'desktop'
-        arch: gcc_64
+        arch: ${{ matrix.qt_arch }}
         cache: true
         setup-python: false
         tools: 'tools_ifw tools_qtcreator,qt.tools.qtcreator'
@@ -28,28 +39,35 @@ jobs:
 
     - name: Install Dependencies
       run: |
+        sudo dpkg --add-architecture ${{ matrix.arch }}
         sudo apt-get update
         sudo apt-get install -y build-essential cmake ninja-build \
-          libunwind-dev libgl1-mesa-dev \
-          libpulse-dev libasound2-dev \
-          libgstreamer1.0-dev \
-          libgstreamer-plugins-base1.0-dev \
-          gstreamer1.0-plugins-base \
-          gstreamer1.0-plugins-good \
-          gstreamer1.0-plugins-bad \
-          gstreamer1.0-plugins-ugly \
-          gstreamer1.0-libav \
-          qtbase5-dev \
-          qtmultimedia5-dev \
-          qttools5-dev \
-          qttools5-dev-tools \
-          libqt5multimedia5-plugins
+          crossbuild-essential-${{ matrix.arch }} \
+          libunwind-dev:${{ matrix.arch }} \
+          libgl1-mesa-dev:${{ matrix.arch }} \
+          libpulse-dev:${{ matrix.arch }} \
+          libasound2-dev:${{ matrix.arch }} \
+          libgstreamer1.0-dev:${{ matrix.arch }} \
+          libgstreamer-plugins-base1.0-dev:${{ matrix.arch }} \
+          gstreamer1.0-plugins-base:${{ matrix.arch }} \
+          gstreamer1.0-plugins-good:${{ matrix.arch }} \
+          gstreamer1.0-plugins-bad:${{ matrix.arch }} \
+          gstreamer1.0-plugins-ugly:${{ matrix.arch }} \
+          gstreamer1.0-libav:${{ matrix.arch }} \
+          qtbase5-dev:${{ matrix.arch }} \
+          qtmultimedia5-dev:${{ matrix.arch }} \
+          qttools5-dev:${{ matrix.arch }} \
+          qttools5-dev-tools:${{ matrix.arch }} \
+          libqt5multimedia5-plugins:${{ matrix.arch }}
 
     - name: Configure CMake
       run: |
         mkdir -p build
         cd build
-        cmake -GNinja ..
+        cmake -GNinja \
+          -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.platform }} \
+          -DCMAKE_CROSSCOMPILING=ON \
+          ..
 
     - name: Build
       run: |
@@ -64,6 +82,6 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: YinYue-linux
+        name: YinYue-linux-${{ matrix.arch }}
         path: build/*.deb
         retention-days: 1 
