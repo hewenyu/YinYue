@@ -5,6 +5,7 @@
 #include <QMediaPlayer>
 #include <QUrl>
 #include <QMediaContent>
+#include "models/playlist.h"
 
 class MusicPlayer : public QObject
 {
@@ -22,6 +23,7 @@ public:
     void setVolume(int volume);
     void setPosition(qint64 position);
     void setSource(const QUrl &source);
+    void setPlaylist(Playlist *playlist) { m_playlist = playlist; }
 
     // 获取状态
     QMediaPlayer::State state() const;
@@ -42,6 +44,7 @@ signals:
 
 private:
     QMediaPlayer *m_player;
+    Playlist *m_playlist;  // 不拥有此指针
 };
 
 #endif // MUSICPLAYER_H 

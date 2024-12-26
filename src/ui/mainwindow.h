@@ -66,7 +66,7 @@ private:
     void loadFolder(const QString &folderPath);
     void refreshMusicLibrary();
     void addToPlaylist(const MusicFile &file);
-    void updateCurrentSong(const MusicFile &file);
+    void updateCurrentSong(const MusicFile &file, bool updatePlayer = true);
     void loadLyric(const QString &musicFilePath);
     void adjustLyricFontSize();
     void loadSettings();

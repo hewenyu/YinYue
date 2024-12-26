@@ -23,6 +23,10 @@ MainWindow::MainWindow(QWidget *parent)
     , m_isUserSeeking(false)
 {
     ui->setupUi(this);
+    
+    // 设置播放器的播放列表
+    m_player->setPlaylist(m_playlist);
+    
     setupConnections();
     
     // 设置进度条更新定时器
@@ -254,15 +258,17 @@ void MainWindow::addToPlaylist(const MusicFile &file)
     QListWidgetItem *item = new QListWidgetItem(displayText, ui->playlistWidget);
     item->setToolTip(file.filePath());
     
-    // 如果是第一首添加的歌曲，自动选中
-    if (ui->playlistWidget->count() == 1) {
+    // 仅当播放列表为空且没有正在播放的音乐时，才自动选中并播放
+    if (ui->playlistWidget->count() == 1 && !m_isPlaying) {
         ui->playlistWidget->setCurrentItem(item);
         m_playlist->setCurrentIndex(0);
-        updateCurrentSong(file);
+        updateCurrentSong(file, true);  // 第一首歌时完整更新
+        m_player->setSource(file.fileUrl());
+        m_player->play();
     }
 }
 
-void MainWindow::updateCurrentSong(const MusicFile &file)
+void MainWindow::updateCurrentSong(const MusicFile &file, bool updatePlayer)
 {
     // 更新标题和艺术家信息
     QString title = file.title();
@@ -288,8 +294,10 @@ void MainWindow::updateCurrentSong(const MusicFile &file)
         }
     }
     
-    // 加载歌词
-    loadLyric(file.filePath());
+    // 只在需要时加载歌词
+    if (updatePlayer) {
+        loadLyric(file.filePath());
+    }
 }
 
 void MainWindow::loadLyric(const QString &musicFilePath)
@@ -365,7 +373,7 @@ void MainWindow::updateLyric(qint64 position)
         // 获取基础字体大小
         int baseFontSize = ui->lyricEdit->font().pointSize();
         
-        // 构建显示文本，使用相对字体大小
+        // 构建显示文本，使用对字体大小
         QString displayText;
         
         // 前两行歌词（较暗）
@@ -440,7 +448,7 @@ void MainWindow::on_playlistWidget_doubleClicked(const QModelIndex &index)
     
     m_playlist->setCurrentIndex(row);
     MusicFile currentFile = m_playlist->at(row);
-    updateCurrentSong(currentFile);
+    updateCurrentSong(currentFile, true);  // 双击播放时完整更新
     
     m_player->setSource(currentFile.fileUrl());
     m_player->play();
@@ -510,7 +518,7 @@ void MainWindow::on_removeSelectedButton_clicked()
         if (nextIndex != -1) {
             m_playlist->setCurrentIndex(nextIndex);
             MusicFile currentFile = m_playlist->at(nextIndex);
-            updateCurrentSong(currentFile);
+            updateCurrentSong(currentFile, true);  // 切换到下一首时完整更新
             m_player->setSource(currentFile.fileUrl());
             m_player->play();
         }
@@ -523,15 +531,15 @@ void MainWindow::on_playButton_clicked()
         m_player->pause();
     } else {
         if (m_playlist->currentIndex() == -1 && m_playlist->count() > 0) {
-            // 如果没有中的歌曲但播放列表不为空，播��第一首
+            // 如果没有选中的歌曲但播放列表不为空，播放第一首
             m_playlist->setCurrentIndex(0);
             MusicFile currentFile = m_playlist->at(0);
-            updateCurrentSong(currentFile);
+            updateCurrentSong(currentFile, true);  // 开始播放时完整更新
             m_player->setSource(currentFile.fileUrl());
         } else if (m_playlist->currentIndex() >= 0) {
             // 如果有选中的歌曲，更新当前歌曲信息
             MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
-            updateCurrentSong(currentFile);
+            updateCurrentSong(currentFile, true);  // 继续播放时完整更新
         }
         m_player->play();
     }
@@ -543,7 +551,7 @@ void MainWindow::on_previousButton_clicked()
     if (prevIndex != -1) {
         m_playlist->setCurrentIndex(prevIndex);
         MusicFile currentFile = m_playlist->at(prevIndex);
-        updateCurrentSong(currentFile);
+        updateCurrentSong(currentFile, true);  // 切换到上一首时完��更新
         m_player->setSource(currentFile.fileUrl());
         m_player->play();
     }
@@ -555,7 +563,7 @@ void MainWindow::on_nextButton_clicked()
     if (nextIndex != -1) {
         m_playlist->setCurrentIndex(nextIndex);
         MusicFile currentFile = m_playlist->at(nextIndex);
-        updateCurrentSong(currentFile);
+        updateCurrentSong(currentFile, true);  // 切换到下一首时完整更新
         m_player->setSource(currentFile.fileUrl());
         m_player->play();
     }
@@ -690,7 +698,7 @@ void MainWindow::loadSettings()
     ui->volumeSlider->setValue(volume);
     m_player->setVolume(volume);
     
-    // 加载上次播放的歌曲索引和位置
+    // 加载上次播放的歌曲索引和位��
     int lastIndex = settings.value("currentIndex", -1).toInt();
     qint64 lastPosition = settings.value("position", 0).toLongLong();
     bool wasPlaying = settings.value("isPlaying", false).toBool();
@@ -731,7 +739,7 @@ void MainWindow::saveSettings()
     // 保存音量
     settings.setValue("volume", m_player->volume());
     
-    // 保存当前播放的歌曲索引、位置和状态
+    // 保存当前播放的歌曲���引、位置和状态
     settings.setValue("currentIndex", m_playlist->currentIndex());
     settings.setValue("position", m_player->position());
     settings.setValue("isPlaying", m_isPlaying);

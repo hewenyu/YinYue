@@ -87,8 +87,9 @@ int MusicPlayer::volume() const
 
 void MusicPlayer::onPlaylistChanged()
 {
-    // 如果播放列表为空，停止播放
-    if (m_player->state() != QMediaPlayer::StoppedState) {
+    // 播放列表添加歌曲不影响播放器播放音乐
+    // 只有在播放列表为空时才停止播放
+    if (m_player->state() != QMediaPlayer::StoppedState && m_playlist && m_playlist->count() == 0) {
         stop();
         m_player->setMedia(QMediaContent());  // 清除当前媒体
     }
