@@ -39,7 +39,8 @@ jobs:
           gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
           gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
           gstreamer1.0-libav \
-          qt5-default qtmultimedia5-dev qttools5-dev-tools
+          qtbase5-dev qtmultimedia5-dev qttools5-dev \
+          qttools5-dev-tools libqt5multimedia5-plugins
 
     - name: Configure CMake
       run: |
