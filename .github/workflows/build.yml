@@ -104,23 +104,25 @@ jobs:
         convert -size 540x380 xc:none -draw "roundrectangle 20,20 520,360 20,20" \
                 -fill white -stroke '#666666' resources/dmg_background.png
 
-    - name: Configure CMake
+    - name: Configure CMake (Windows)
+      if: runner.os == 'Windows'
       shell: bash
       run: |
         mkdir -p build
         cd build
-        if [ "$RUNNER_OS" == "Windows" ]; then
-          # Windows 特定的 CMake 配置
-          cmake -GNinja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl ..
-        else
-          # Linux 和 macOS 的配置
-          cmake -GNinja ..
-        fi
+        cmake -GNinja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl ..
       env:
-        # Windows 特定环境变量
         CMAKE_PREFIX_PATH: ${{ runner.workspace }}/Qt/Qt5.15.2/msvc2019_64
         CC: cl.exe
         CXX: cl.exe
+
+    - name: Configure CMake (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        mkdir -p build
+        cd build
+        cmake -GNinja ..
 
     - name: Build
       shell: bash
