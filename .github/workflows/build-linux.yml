@@ -39,34 +39,31 @@ jobs:
 
     - name: Install Dependencies
       run: |
-        sudo dpkg --add-architecture ${{ matrix.arch }}
         sudo apt-get update
         sudo apt-get install -y build-essential cmake ninja-build \
-          crossbuild-essential-${{ matrix.arch }} \
-          libunwind-dev:${{ matrix.arch }} \
-          libgl1-mesa-dev:${{ matrix.arch }} \
-          libpulse-dev:${{ matrix.arch }} \
-          libasound2-dev:${{ matrix.arch }} \
-          libgstreamer1.0-dev:${{ matrix.arch }} \
-          libgstreamer-plugins-base1.0-dev:${{ matrix.arch }} \
-          gstreamer1.0-plugins-base:${{ matrix.arch }} \
-          gstreamer1.0-plugins-good:${{ matrix.arch }} \
-          gstreamer1.0-plugins-bad:${{ matrix.arch }} \
-          gstreamer1.0-plugins-ugly:${{ matrix.arch }} \
-          gstreamer1.0-libav:${{ matrix.arch }} \
-          qtbase5-dev:${{ matrix.arch }} \
-          qtmultimedia5-dev:${{ matrix.arch }} \
-          qttools5-dev:${{ matrix.arch }} \
-          qttools5-dev-tools:${{ matrix.arch }} \
-          libqt5multimedia5-plugins:${{ matrix.arch }}
+          libunwind-dev \
+          libgl1-mesa-dev \
+          libpulse-dev \
+          libasound2-dev \
+          libgstreamer1.0-dev \
+          libgstreamer-plugins-base1.0-dev \
+          gstreamer1.0-plugins-base \
+          gstreamer1.0-plugins-good \
+          gstreamer1.0-plugins-bad \
+          gstreamer1.0-plugins-ugly \
+          gstreamer1.0-libav \
+          qtbase5-dev \
+          qtmultimedia5-dev \
+          qttools5-dev \
+          qttools5-dev-tools \
+          libqt5multimedia5-plugins
 
     - name: Configure CMake
       run: |
         mkdir -p build
         cd build
         cmake -GNinja \
-          -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.platform }} \
-          -DCMAKE_CROSSCOMPILING=ON \
+          -DCMAKE_BUILD_TYPE=Release \
           ..
 
     - name: Build
