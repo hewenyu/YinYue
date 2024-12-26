@@ -118,8 +118,8 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/yinyue.desktop
 # 安装配置
 if(APPLE)
     install(TARGETS ${PROJECT_NAME}
-        BUNDLE DESTINATION .
-        RUNTIME DESTINATION bin
+        BUNDLE  DESTINATION Applications
+        RUNTIME DESTINATION Applications
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib/static
     )
@@ -164,3 +164,18 @@ set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "YinYue")
 
 include(CPack)
+
+# 移除重复的安装目标
+if(NOT APPLE)
+    install(TARGETS ${PROJECT_NAME}
+        RUNTIME DESTINATION bin
+        COMPONENT applications)
+endif()
+
+# 安装桌面文件（仅用于 Linux）
+if(UNIX AND NOT APPLE)
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/yinyue.desktop.in
+                   ${CMAKE_CURRENT_BINARY_DIR}/yinyue.desktop @ONLY)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/yinyue.desktop
+            DESTINATION share/applications)
+endif()
