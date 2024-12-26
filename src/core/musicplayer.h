@@ -5,6 +5,7 @@
 #include <QMediaPlayer>
 #include <QUrl>
 #include <QMediaContent>
+#include <QEventLoop>
 #include "models/playlist.h"
 
 class MusicPlayer : public QObject
@@ -28,7 +29,7 @@ public:
     // 播放模式控制
     Playlist::PlayMode playMode() const;
     void setPlayMode(Playlist::PlayMode mode);
-    void togglePlayMode();  // 循环切换播放模式
+    void togglePlayMode();
 
     // 获取状态
     QMediaPlayer::State state() const;
@@ -36,11 +37,12 @@ public:
     qint64 duration() const;
     int volume() const;
 
-    // 处理播放列表变化
+public slots:
     void onPlaylistChanged();
 
 private slots:
-    void onMediaStatusChanged(QMediaPlayer::MediaStatus status);  // 添加处理播放结束的槽函数
+    void onMediaStatusChanged(QMediaPlayer::MediaStatus status);
+    void onStateChanged(QMediaPlayer::State state);
 
 signals:
     void stateChanged(QMediaPlayer::State state);
@@ -48,13 +50,18 @@ signals:
     void durationChanged(qint64 duration);
     void volumeChanged(int volume);
     void mediaStatusChanged(QMediaPlayer::MediaStatus status);
+    void playModeChanged(Playlist::PlayMode mode);
     void errorOccurred(const QString &error);
-    void playModeChanged(Playlist::PlayMode mode);  // 新增播放模式改变信号
-    void currentSongChanged(int index);  // 新增：当前歌曲改变信号
+    void currentSongChanged(int index);
 
 private:
+    // 辅助函数：等待媒体加载或状态变化
+    bool waitForMediaLoaded(int timeout = 5000);
+    bool waitForState(QMediaPlayer::State targetState, int timeout = 5000);
+
     QMediaPlayer *m_player;
-    Playlist *m_playlist;  // 不拥有此指针
+    Playlist *m_playlist;
+    QEventLoop *m_eventLoop;
 };
 
 #endif // MUSICPLAYER_H 
