@@ -217,36 +217,6 @@ void MainWindow::loadFolder(const QString &folderPath)
     refreshMusicLibrary();
 }
 
-void MainWindow::loadFile(const QString &filePath)
-{
-    qDebug() << "正在加载文件:" << filePath;
-    
-    QFileInfo fileInfo(filePath);
-    if (!fileInfo.exists() || !fileInfo.isReadable() || fileInfo.size() == 0) {
-        qDebug() << "文件无效:" << filePath;
-        return;
-    }
-    
-    // 添加到音乐库
-    MusicFile musicFile(filePath);
-    m_musicLibrary[filePath] = musicFile;
-    
-    // 添加到文件监控
-    if (!m_fileWatcher->files().contains(filePath)) {
-        m_fileWatcher->addPath(filePath);
-    }
-    
-    // 添加到音乐库列表
-    QString displayText = musicFile.title();
-    if (!musicFile.artist().isEmpty()) {
-        displayText = musicFile.artist() + " - " + musicFile.title();
-    }
-    QListWidgetItem *item = new QListWidgetItem(displayText, ui->libraryWidget);
-    item->setToolTip(filePath);
-    
-    qDebug() << "文件加载成功:" << displayText;
-}
-
 void MainWindow::addToPlaylist(const MusicFile &file)
 {
     // 检查是否已存在
@@ -323,7 +293,7 @@ void MainWindow::loadLyric(const QString &musicFilePath)
     QString baseName = musicFile.completeBaseName();
     QString lrcPath = musicFile.absolutePath() + QDir::separator() + baseName + ".lrc";
     
-    qDebug() << "尝试加载歌词文件:" << lrcPath;
+    qDebug() << "尝试加载��词文件:" << lrcPath;
     QFileInfo lrcFile(lrcPath);
     
     if (lrcFile.exists()) {
@@ -510,7 +480,7 @@ void MainWindow::on_removeSelectedButton_clicked()
         m_player->setSource(QUrl());  // 清除当前媒体
         
         // 清除当前播放信息
-        ui->titleLabel->setText(tr("未知歌曲"));
+        ui->titleLabel->setText(tr("���知歌曲"));
         ui->artistLabel->setText(tr("未知艺术家"));
         setWindowTitle(tr("音乐播放器"));
         
@@ -589,18 +559,6 @@ void MainWindow::on_volumeSlider_valueChanged(int value)
 void MainWindow::on_progressSlider_sliderMoved(int position)
 {
     m_player->setPosition(position);
-}
-
-void MainWindow::on_actionOpenFile_triggered()
-{
-    QString filePath = QFileDialog::getOpenFileName(this,
-        tr("打开音乐文件"),
-        QStandardPaths::writableLocation(QStandardPaths::MusicLocation),
-        tr("音乐文件 (*.mp3 *.wav *.flac)"));
-        
-    if (!filePath.isEmpty()) {
-        loadFile(filePath);
-    }
 }
 
 void MainWindow::on_actionOpenFolder_triggered()
@@ -828,7 +786,7 @@ void MainWindow::updatePlayModeButton(Playlist::PlayMode mode)
 {
     QString modeText = getPlayModeText(mode);
     ui->playModeButton->setText(modeText);
-    ui->playModeButton->setToolTip(tr("当前播放模式：%1").arg(modeText));
+    ui->playModeButton->setToolTip(tr("当前播放���式：%1").arg(modeText));
 }
 
 QString MainWindow::getPlayModeText(Playlist::PlayMode mode)

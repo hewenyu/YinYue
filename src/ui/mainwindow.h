@@ -36,7 +36,6 @@ private slots:
     void on_progressSlider_sliderMoved(int position);
     
     // 文件菜单
-    void on_actionOpenFile_triggered();
     void on_actionOpenFolder_triggered();
     void on_actionExit_triggered();
     
@@ -66,7 +65,6 @@ private slots:
 private:
     void setupConnections();
     void updateTimeLabel(QLabel *label, qint64 time);
-    void loadFile(const QString &filePath);
     void loadFolder(const QString &folderPath);
     void refreshMusicLibrary();
     void addToPlaylist(const MusicFile &file);
