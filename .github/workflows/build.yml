@@ -43,30 +43,26 @@ jobs:
         target: 'desktop'
         arch: ${{ matrix.qt_arch }}
         cache: true
-
+        setup-python: false
+        tools: 'tools_ifw tools_qtcreator,qt.tools.qtcreator'
+        extra: '--external 7z'
+        
     # Linux 依赖安装
     - name: Install Linux Dependencies
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        # 首先安装基础开发工具
-        sudo apt-get install -y build-essential cmake ninja-build
-        
-        # 安装基础库依赖
-        sudo apt-get install -y libunwind-dev libgl1-mesa-dev \
-          libpulse-dev libasound2-dev
-        
-        # 安装 GStreamer 依赖
-        sudo apt-get install -y libgstreamer1.0-dev \
+        sudo apt-get install -y build-essential cmake ninja-build \
+          libunwind-dev libgl1-mesa-dev \
+          libpulse-dev libasound2-dev \
+          libgstreamer1.0-dev \
           libgstreamer-plugins-base1.0-dev \
           gstreamer1.0-plugins-base \
           gstreamer1.0-plugins-good \
           gstreamer1.0-plugins-bad \
           gstreamer1.0-plugins-ugly \
-          gstreamer1.0-libav
-        
-        # 安装 Qt5 依赖
-        sudo apt-get install -y qtbase5-dev \
+          gstreamer1.0-libav \
+          qtbase5-dev \
           qtmultimedia5-dev \
           qttools5-dev \
           qttools5-dev-tools \
@@ -80,15 +76,8 @@ jobs:
     - name: Install Windows Build Tools
       if: runner.os == 'Windows'
       run: |
-        # 安装 Ninja
-        choco install ninja
-        
-        # 设置 Visual Studio 环境变量
-        echo "Adding Visual Studio Environment Variables"
+        choco install ninja cmake
         echo "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build" >> $GITHUB_PATH
-        
-        # 安装其他必要工具
-        choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
       shell: bash
 
     # macOS 依赖安装
@@ -100,7 +89,7 @@ jobs:
         # 创建 DMG 资源目录
         mkdir -p resources
         
-        # 创建一个简单的背景图片（如果没有自定义背景）
+        # 创建一个简单的背景图片
         convert -size 540x380 xc:none -draw "roundrectangle 20,20 520,360 20,20" \
                 -fill white -stroke '#666666' resources/dmg_background.png
 
@@ -112,9 +101,7 @@ jobs:
         cd build
         cmake -GNinja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl ..
       env:
-        CMAKE_PREFIX_PATH: ${{ runner.workspace }}/Qt/Qt5.15.2/msvc2019_64
-        CC: cl.exe
-        CXX: cl.exe
+        CMAKE_PREFIX_PATH: ${{ runner.workspace }}/Qt/5.15.2/msvc2019_64
 
     - name: Configure CMake (Unix)
       if: runner.os != 'Windows'
