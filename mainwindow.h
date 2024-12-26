@@ -5,6 +5,8 @@
 #include <QLabel>
 #include <QModelIndex>
 #include <QFileSystemWatcher>
+#include <QTimer>
+#include <QCloseEvent>
 #include "src/core/musicplayer.h"
 #include "src/models/playlist.h"
 #include "src/models/lyric.h"
@@ -23,6 +25,7 @@ public:
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
 
 private slots:
     // 播放控制
@@ -68,6 +71,16 @@ private:
     void adjustLyricFontSize();
     void loadSettings();
     void saveSettings();
+    
+    // 新增：进度条相关
+    QTimer *m_progressTimer;        // 用于平滑更新进度条
+    qint64 m_lastPosition;          // 上次播放位置
+    bool m_isUserSeeking;           // 用户是否正在拖动进度条
+    
+    void savePlaybackState();       // 保存播放状态
+    void restorePlaybackState();    // 恢复播放状态
+    void startProgressTimer();      // 启动进度条更新定时器
+    void stopProgressTimer();       // 停止进度条更新定时器
 
 private:
     Ui::MainWindow *ui;
@@ -75,8 +88,8 @@ private:
     Playlist *m_playlist;
     Lyric *m_lyric;
     bool m_isPlaying;
-    QString m_currentMusicFolder;
     QFileSystemWatcher *m_fileWatcher;
+    QString m_currentMusicFolder;
     QMap<QString, MusicFile> m_musicLibrary;
 };
 

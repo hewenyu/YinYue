@@ -8,6 +8,7 @@
 #include <QProgressDialog>
 #include <QDebug>
 #include <QSettings>
+#include <QTimer>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -17,9 +18,21 @@ MainWindow::MainWindow(QWidget *parent)
     , m_lyric(new Lyric(this))
     , m_isPlaying(false)
     , m_fileWatcher(new QFileSystemWatcher(this))
+    , m_progressTimer(new QTimer(this))
+    , m_lastPosition(0)
+    , m_isUserSeeking(false)
 {
     ui->setupUi(this);
     setupConnections();
+    
+    // 设置进度条更新定时器
+    m_progressTimer->setInterval(100);  // 100ms更新一次
+    connect(m_progressTimer, &QTimer::timeout, this, [this]() {
+        if (!m_isUserSeeking) {
+            qint64 position = m_player->position();
+            updatePosition(position);
+        }
+    });
     
     // 设置初始音量
     ui->volumeSlider->setValue(m_player->volume());
@@ -32,6 +45,7 @@ MainWindow::MainWindow(QWidget *parent)
     
     // 加载配置
     loadSettings();
+    restorePlaybackState();
 }
 
 MainWindow::~MainWindow()
@@ -76,6 +90,20 @@ void MainWindow::setupConnections()
     
     // 初始调整字体大小
     adjustLyricFontSize();
+    
+    // 进度条相关连接
+    connect(ui->progressSlider, &QSlider::sliderPressed, this, [this]() {
+        m_isUserSeeking = true;
+        stopProgressTimer();
+    });
+    
+    connect(ui->progressSlider, &QSlider::sliderReleased, this, [this]() {
+        m_isUserSeeking = false;
+        m_player->setPosition(ui->progressSlider->value());
+        if (m_isPlaying) {
+            startProgressTimer();
+        }
+    });
 }
 
 void MainWindow::onDirectoryChanged(const QString &path)
@@ -322,7 +350,7 @@ void MainWindow::updateLyric(qint64 position)
         QString nextLyric1 = m_lyric->getLyricText(nextTime1);
         QString nextLyric2 = m_lyric->getLyricText(nextTime2);
         
-        // 获取基础字体���小
+        // 获取基础字体大小
         int baseFontSize = ui->lyricEdit->font().pointSize();
         
         // 构建显示文本，使用相对字体大小
@@ -508,6 +536,12 @@ void MainWindow::updatePlaybackState(QMediaPlayer::State state)
 {
     m_isPlaying = (state == QMediaPlayer::PlayingState);
     ui->playButton->setText(m_isPlaying ? tr("暂停") : tr("播放"));
+    
+    if (m_isPlaying) {
+        startProgressTimer();
+    } else {
+        stopProgressTimer();
+    }
 }
 
 void MainWindow::updatePosition(qint64 position)
@@ -636,5 +670,58 @@ void MainWindow::saveSettings()
     settings.setValue("isPlaying", m_isPlaying);
     
     settings.sync();
+}
+
+void MainWindow::startProgressTimer()
+{
+    if (!m_progressTimer->isActive()) {
+        m_progressTimer->start();
+    }
+}
+
+void MainWindow::stopProgressTimer()
+{
+    if (m_progressTimer->isActive()) {
+        m_progressTimer->stop();
+    }
+}
+
+void MainWindow::savePlaybackState()
+{
+    QSettings settings;
+    settings.setValue("lastPosition", m_player->position());
+    
+    // 使用currentIndex和at方法获取当前文件
+    int currentIndex = m_playlist->currentIndex();
+    if (currentIndex >= 0 && currentIndex < m_playlist->count()) {
+        settings.setValue("lastFile", m_playlist->at(currentIndex).filePath());
+    }
+}
+
+void MainWindow::restorePlaybackState()
+{
+    QSettings settings;
+    m_lastPosition = settings.value("lastPosition", 0).toLongLong();
+    QString lastFile = settings.value("lastFile").toString();
+    
+    if (!lastFile.isEmpty() && QFile::exists(lastFile)) {
+        // 找到对应的播放列表项并设置
+        for (int i = 0; i < ui->playlistWidget->count(); ++i) {
+            QListWidgetItem *item = ui->playlistWidget->item(i);
+            if (item->toolTip() == lastFile) {
+                ui->playlistWidget->setCurrentItem(item);
+                m_playlist->setCurrentIndex(i);
+                m_player->setPosition(m_lastPosition);
+                updatePosition(m_lastPosition);
+                break;
+            }
+        }
+    }
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    savePlaybackState();
+    QMainWindow::closeEvent(event);
 }
 

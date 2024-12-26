@@ -80,3 +80,28 @@ install(TARGETS YinYue
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(YinYue)
 endif()
+
+# 添加打包配置
+set(CPACK_GENERATOR "DEB")
+set(CPACK_PACKAGE_NAME "YinYue")
+set(CPACK_PACKAGE_VERSION "1.0.0")
+set(CPACK_PACKAGE_RELEASE "1")
+set(CPACK_PACKAGE_CONTACT "your-email@example.com")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "YinYue Music Player")
+set(CPACK_PACKAGE_DESCRIPTION "A beautiful and feature-rich music player built with Qt")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt6core6, libqt6gui6, libqt6widgets6, libqt6multimedia6")
+set(CPACK_DEBIAN_PACKAGE_SECTION "sound")
+set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+
+# 安装目标
+install(TARGETS ${PROJECT_NAME}
+    RUNTIME DESTINATION bin
+    COMPONENT applications)
+
+# 安装桌面文件
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/yinyue.desktop.in
+               ${CMAKE_CURRENT_BINARY_DIR}/yinyue.desktop @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/yinyue.desktop
+        DESTINATION share/applications)
+
+include(CPack)
