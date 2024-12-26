@@ -74,16 +74,19 @@ jobs:
         cd build
         windeployqt --release --no-translations --no-plugins --no-opengl-sw YinYue.exe
 
-    - name: Create Release Directory
+    - name: Package
       shell: bash
       run: |
-        mkdir -p release
-        cp build/YinYue.exe release/
-        cp build/*.dll release/
+        cd build
+        mkdir -p package
+        cp YinYue.exe package/
+        cp *.dll package/
+        cd package
+        7z a ../YinYue-windows-x64.zip *
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: YinYue-windows-${{ matrix.arch }}
-        path: release
+        name: YinYue-windows-x64
+        path: build/YinYue-windows-x64.zip
         retention-days: 1 

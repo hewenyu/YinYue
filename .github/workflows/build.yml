@@ -28,35 +28,11 @@ jobs:
         pattern: YinYue-*
         merge-multiple: true
 
-    - name: List Artifacts
-      run: |
-        echo "Listing artifacts directory:"
-        ls -la artifacts/
-        echo "Listing all contents recursively:"
-        find artifacts/ -type f
-
-    - name: Create Release Packages
-      run: |
-        cd artifacts
-        if [ -d "YinYue-windows-x64" ]; then
-          zip -r YinYue-windows-x64.zip YinYue-windows-x64
-        else
-          echo "Error: YinYue-windows-x64 directory not found"
-          exit 1
-        fi
-        
-        if [ -f "YinYue-linux-amd64/YinYue" ]; then
-          tar czf YinYue-linux-amd64.tar.gz YinYue-linux-amd64/YinYue
-        else
-          echo "Error: YinYue-linux-amd64/YinYue file not found"
-          exit 1
-        fi
-
     - name: Upload Release Assets
       uses: softprops/action-gh-release@v1
       with:
         files: |
           artifacts/YinYue-windows-x64.zip
-          artifacts/YinYue-linux-amd64.tar.gz
+          artifacts/YinYue-linux-x64.tar.gz
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

@@ -68,9 +68,17 @@ jobs:
         cd build
         ninja
 
+    - name: Package
+      run: |
+        cd build
+        mkdir -p package
+        cp YinYue package/
+        cd package
+        tar czf ../YinYue-linux-x64.tar.gz *
+
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: YinYue-linux-${{ matrix.arch }}
-        path: build/YinYue
+        name: YinYue-linux-x64
+        path: build/YinYue-linux-x64.tar.gz
         retention-days: 1 
