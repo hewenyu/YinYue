@@ -158,41 +158,13 @@ void MusicPlayer::play()
 
     if (m_useDLNA) {
         MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
-        m_dlnaManager->playMedia(currentFile.fileUrl());
-    } else {
-        qDebug() << "Play requested, current state:" << m_player->state()
-                 << "media status:" << m_player->mediaStatus()
-                 << "current index:" << (m_playlist ? m_playlist->currentIndex() : -1);
-
-        // 如果是第一次播放，设置当前索引为0
-        if (m_playlist->currentIndex() == -1) {
-            qDebug() << "First play, setting current index to 0";
-            m_playlist->setCurrentIndex(0);
-        }
-
-        if (m_player->state() == QMediaPlayer::StoppedState || 
-            m_player->mediaStatus() == QMediaPlayer::NoMedia ||
-            m_player->mediaStatus() == QMediaPlayer::InvalidMedia) {
-            qDebug() << "Loading media from playlist at index:" << m_playlist->currentIndex();
-            MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
-            m_player->setMedia(QMediaContent(currentFile.fileUrl()));
-            
-            if (waitForMediaLoaded()) {
-                qDebug() << "Media loaded successfully, starting playback";
-                m_player->play();
-                if (!waitForState(QMediaPlayer::PlayingState)) {
-                    qDebug() << "Failed to enter playing state";
-                }
-            } else {
-                qDebug() << "Failed to load media";
-            }
-        } else {
-            qDebug() << "Resuming playback";
+        if (!m_dlnaManager->playMedia(currentFile.fileUrl())) {
+            // 如果DLNA播放失败，尝试本地播放
+            m_useDLNA = false;
             m_player->play();
-            if (!waitForState(QMediaPlayer::PlayingState)) {
-                qDebug() << "Failed to enter playing state";
-            }
         }
+    } else {
+        m_player->play();
     }
 }
 
@@ -391,7 +363,11 @@ void MusicPlayer::setPosition(qint64 position)
 
 void MusicPlayer::setSource(const QUrl &source)
 {
-    m_player->setMedia(QMediaContent(source));
+    if (m_useDLNA) {
+        m_dlnaManager->playMedia(source);
+    } else {
+        m_player->setMedia(QMediaContent(source));
+    }
 }
 
 Playlist::PlayMode MusicPlayer::playMode() const
@@ -486,7 +462,7 @@ bool MusicPlayer::connectToDLNADevice(const QString& deviceId)
     if (success) {
         m_useDLNA = true;
         // 如果当前正在播放，则通过DLNA继续播放
-        if (m_player->state() == QMediaPlayer::PlayingState) {
+        if (state() == QMediaPlayer::PlayingState && m_playlist && m_playlist->currentIndex() >= 0) {
             MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
             m_dlnaManager->playMedia(currentFile.fileUrl());
         }
@@ -502,7 +478,7 @@ void MusicPlayer::disconnectFromDLNADevice()
         m_useDLNA = false;
         
         // 如果当前正在通过DLNA播放，则切换回本地播放
-        if (m_player->state() == QMediaPlayer::PlayingState) {
+        if (state() == QMediaPlayer::PlayingState && m_playlist && m_playlist->currentIndex() >= 0) {
             MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
             m_player->setMedia(QMediaContent(currentFile.fileUrl()));
             m_player->play();
@@ -522,6 +498,14 @@ QString MusicPlayer::getCurrentDLNADevice() const
 
 void MusicPlayer::onDLNAPlaybackStateChanged(const QString& state)
 {
-    // TODO: 处理DLNA播放状态变化
     qDebug() << "DLNA playback state changed:" << state;
+    
+    // 根据DLNA播放状态更新本地播放器状态
+    if (state == "PLAYING") {
+        emit stateChanged(QMediaPlayer::PlayingState);
+    } else if (state == "PAUSED") {
+        emit stateChanged(QMediaPlayer::PausedState);
+    } else if (state == "STOPPED") {
+        emit stateChanged(QMediaPlayer::StoppedState);
+    }
 } 

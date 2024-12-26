@@ -175,6 +175,15 @@ void MainWindow::on_dlnaDeviceList_itemDoubleClicked(QListWidgetItem *item)
     if (!deviceId.isEmpty()) {
         if (m_player->connectToDLNADevice(deviceId)) {
             ui->disconnectDLNAButton->setEnabled(true);
+            
+            // 如果当前有正在播放的音乐，立即通过DLNA播放
+            if (m_playlist->currentIndex() >= 0) {
+                MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
+                m_player->setSource(currentFile.fileUrl());
+                if (m_isPlaying) {
+                    m_player->play();
+                }
+            }
         }
     }
 }
@@ -201,6 +210,13 @@ void MainWindow::handleDLNAConnectionStateChanged(bool connected)
         // 如果断开连接，更新界面状态
         ui->dlnaButton->setChecked(false);
         ui->libraryStack->setCurrentIndex(0);
+        
+        // 如果当前正在播放，切换回本地播放
+        if (m_isPlaying && m_playlist->currentIndex() >= 0) {
+            MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
+            m_player->setSource(currentFile.fileUrl());
+            m_player->play();
+        }
     }
 }
 
@@ -614,7 +630,7 @@ void MainWindow::on_playButton_clicked()
         m_player->pause();
     } else {
         if (m_playlist->currentIndex() == -1 && m_playlist->count() > 0) {
-            // 如果没有选中的歌曲但播放��表不为空，播放第一首
+            // 如果没有选中的歌曲但播放列表不为空，播放第一首
             m_playlist->setCurrentIndex(0);
             MusicFile currentFile = m_playlist->at(0);
             updateCurrentSong(currentFile, true);  // 开始播放时完整更新
@@ -687,6 +703,14 @@ void MainWindow::updatePlaybackState(QMediaPlayer::State state)
         startProgressTimer();
     } else {
         stopProgressTimer();
+    }
+    
+    // 更新 DLNA 状态
+    if (m_player->isDLNAConnected()) {
+        if (m_isPlaying && m_playlist->currentIndex() >= 0) {
+            MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
+            m_player->setSource(currentFile.fileUrl());
+        }
     }
 }
 

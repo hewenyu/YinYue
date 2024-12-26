@@ -77,3 +77,21 @@ target_link_libraries(musicplayer_test
 )
 target_include_directories(musicplayer_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_test(NAME musicplayer_test COMMAND musicplayer_test)
+
+# DLNA 测试
+add_executable(dlna_test
+    tests/dlna_test.cpp
+    src/core/dlnamanager.cpp
+    src/core/musicplayer.cpp
+    src/models/playlist.cpp
+    src/models/musicfile.cpp
+    src/models/lyric.cpp
+)
+target_link_libraries(dlna_test
+    Qt5::Core
+    Qt5::Test
+    Qt5::Multimedia
+    Qt5::Network
+)
+target_include_directories(dlna_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_test(NAME dlna_test COMMAND dlna_test)

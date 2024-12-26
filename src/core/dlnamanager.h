@@ -6,6 +6,7 @@
 #include <QUdpSocket>
 #include <QTimer>
 #include <QHostAddress>
+#include <QDebug>
 
 class DLNAManager : public QObject
 {
@@ -18,7 +19,13 @@ public:
         QString type;
         QHostAddress address;
         int port;
+        
+        DLNADevice() {}
+        DLNADevice(const QString& _id, const QString& _name, const QString& _location)
+            : id(_id), name(_name), location(_location) {}
     };
+    
+    friend QDebug operator<<(QDebug debug, const DLNADevice& device);
 
     explicit DLNAManager(QObject *parent = nullptr);
     ~DLNAManager();
@@ -85,5 +92,7 @@ private:
     const int DISCOVERY_INTERVAL = 5000;  // 5秒
     const int DEVICE_TIMEOUT = 30000;     // 30秒
 };
+
+QDebug operator<<(QDebug debug, const DLNAManager::DLNADevice& device);
 
 #endif // DLNAMANAGER_H 
