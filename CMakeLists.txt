@@ -26,36 +26,45 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools Mul
 
 set(TS_FILES YinYue_zh_CN.ts)
 
-set(PROJECT_SOURCES
-        main.cpp
-        mainwindow.cpp
-        mainwindow.h
-        mainwindow.ui
-        src/core/musicplayer.cpp
-        src/core/musicplayer.h
-        src/models/musicfile.cpp
-        src/models/musicfile.h
-        src/models/playlist.cpp
-        src/models/playlist.h
-        src/models/lyric.cpp
-        src/models/lyric.h
-        ${TS_FILES}
+# 源文件分组
+set(SOURCES
+    src/main.cpp
+    src/ui/mainwindow.cpp
+    src/ui/mainwindow.h
+    src/ui/mainwindow.ui
+    src/core/musicplayer.cpp
+    src/core/musicplayer.h
+    src/models/musicfile.cpp
+    src/models/musicfile.h
+    src/models/playlist.cpp
+    src/models/playlist.h
+    src/models/lyric.cpp
+    src/models/lyric.h
+    ${TS_FILES}
+)
+
+# 头文件目录
+include_directories(
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/src/models
+    ${CMAKE_SOURCE_DIR}/src/ui
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(YinYue
         MANUAL_FINALIZATION
-        ${PROJECT_SOURCES}
+        ${SOURCES}
     )
     qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
 else()
     if(ANDROID)
         add_library(YinYue SHARED
-            ${PROJECT_SOURCES}
+            ${SOURCES}
         )
     else()
         add_executable(YinYue
-            ${PROJECT_SOURCES}
+            ${SOURCES}
         )
     endif()
 
