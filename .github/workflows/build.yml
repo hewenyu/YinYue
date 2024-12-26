@@ -1,6 +1,10 @@
 name: Build and Package
 
 on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
   release:
     types: [created]
 
@@ -9,14 +13,14 @@ permissions:
   packages: write
 
 jobs:
-  linux:
-    uses: ./.github/workflows/build-linux.yml
+#   linux:
+#     uses: ./.github/workflows/build-linux.yml
 
   windows:
     uses: ./.github/workflows/build-windows.yml
 
   collect-artifacts:
-    needs: [linux, windows]
+    needs: [windows]
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
     
@@ -33,6 +37,6 @@ jobs:
       with:
         files: |
           artifacts/YinYue-windows-x64.zip
-          artifacts/YinYue-linux-x64.tar.gz
+        #   artifacts/YinYue-linux-x64.tar.gz
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
