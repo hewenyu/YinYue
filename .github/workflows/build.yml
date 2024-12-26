@@ -84,7 +84,10 @@ jobs:
     - name: Install macOS Dependencies
       if: runner.os == 'macOS'
       run: |
-        brew install cmake ninja imagemagick
+        brew install cmake ninja imagemagick p7zip pipx
+        
+        # 使用 pipx 安装 Python 包
+        pipx install py7zr==0.20.*
         
         # 创建 DMG 资源目录
         mkdir -p resources
@@ -92,6 +95,19 @@ jobs:
         # 创建一个简单的背景图片
         convert -size 540x380 xc:none -draw "roundrectangle 20,20 520,360 20,20" \
                 -fill white -stroke '#666666' resources/dmg_background.png
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '5.15.2'
+        host: ${{ matrix.qt_host }}
+        target: 'desktop'
+        arch: ${{ matrix.qt_arch }}
+        cache: true
+        setup-python: false
+        aqtversion: '==3.1.*'
+        py7zrversion: '==0.20.*'
+        extra: '--external 7z'
 
     - name: Configure CMake (Windows)
       if: runner.os == 'Windows'
