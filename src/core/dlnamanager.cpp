@@ -376,6 +376,15 @@ void DLNAManager::fetchDeviceDescription(const QString& location)
     });
 }
 
+// 从 m_devices 更新设备信息
+void DLNAManager::updateDeviceInfo(const QString& deviceId, const DLNADeviceInfo& info)
+{
+    if (m_devices.contains(deviceId)) {
+        m_devices[deviceId].info = info;
+        qDebug() << "更新设备信息:" << deviceId << info.friendlyName;
+    }
+}
+
 // 解析设备描述
 void DLNAManager::parseDeviceDescription(const QByteArray& data)
 {
@@ -464,10 +473,11 @@ void DLNAManager::parseDeviceDescription(const QByteArray& data)
             }
             info.services = serviceList;
         }
-        device.info = info;
-
+        // updateDeviceInfo
+        updateDeviceInfo(device.id, info);
     }
-    
+    // 更新设备信息
+    m_devices[device.id] = device;
     if (xml.hasError()) {
         qDebug() << "XML解析错误:" << xml.errorString();
     }

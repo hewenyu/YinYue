@@ -92,6 +92,9 @@ public:
     explicit DLNAManager(QObject *parent = nullptr);
     ~DLNAManager();
 
+    // 更新设备信息
+    void updateDeviceInfo(const QString& deviceId, const DLNADeviceInfo& info);
+
     void startDiscovery();
     void stopDiscovery();
     QList<DLNADevice> getAvailableDevices() const;
