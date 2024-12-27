@@ -478,6 +478,7 @@ void DLNAManager::parseDeviceDescription(const QByteArray& data)
         }
         
     }
+    qDebug() << "更新设备信息:" << device.id << device.info.friendlyName;
     // updateDeviceInfo
     updateDeviceInfo(device);
 
