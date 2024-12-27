@@ -123,20 +123,23 @@ void DLNATest::testDeviceDiscovery()
     // 打印设备数量
     qDebug() << "设备数量:" << devices.size();
 
-    // 验证设备列表
-    for (int retry = 0; retry < maxRetries && !found; retry++) {
-        qDebug() << "验证发现的设备... (尝试" << retry + 1 << "/" << maxRetries << ")";
-        for (const auto& device : devices) {
-            qDebug() << "检查设备:" << device.id << device.name << device.location;
-            if (device.id == m_testDeviceId) {
-                found = true;
-                qDebug() << "找到目标设备:" << device.id;
-                break;
-            }
-        }
+
+    while (devices.size() == 2)
+    {
+        qDebug() << "等待设备发现...";
+        devices = m_dlnaManager->getAvailableDevices();
+        qDebug() << "设备数量:" << devices.size();
         sleep(1);
     }
     
+    // 验证设备列表
+    for (const auto& device : devices) {
+        if (device.id == m_testDeviceId) {
+            found = true;
+            qDebug() << "找到目标设备:" << device.id;
+            break;
+        }
+    }
     qDebug() << "发现的设备ID:" << (found ? m_testDeviceId : "未找到");
     qDebug() << "期望的设备ID:" << m_testDeviceId;
     QVERIFY(found);
