@@ -65,6 +65,23 @@ private slots:
     void handleUPnPResponse(QNetworkReply* reply);
 
 private:
+    // 定义静态成员变量
+    // 设备类型
+    static const QString UPnP_RootDevice;
+    static const QString UPnP_InternetGatewayDevice;
+    static const QString UPnP_WANConnectionDevice;
+    static const QString UPnP_WANCommonInterfaceConfig;
+    static const QString UPnP_WANIPConnection;
+    static const QString UPnP_Layer3Forwarding;
+    // 服务类型
+    static const QString UPnP_MediaServer;
+    static const QString UPnP_MediaRenderer;
+    static const QString UPnP_ContentDirectory;
+    static const QString UPnP_RenderingControl;
+    static const QString UPnP_ConnectionManager;
+    static const QString UPnP_AVTransport;
+
+
     static const QHostAddress SSDP_MULTICAST_ADDR;
     static const quint16 SSDP_PORT = 1900;
     static const int DISCOVERY_INTERVAL = 5000;  // 5秒
