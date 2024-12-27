@@ -18,18 +18,75 @@ class DLNAManager : public QObject
     Q_OBJECT
 
 public:
+    // serviceList
+    // DLNA 服务结构体
+    struct DLNAService {
+        QString serviceType;      // 服务类型 (如 "urn:schemas-upnp-org:service:AVTransport:1")
+        QString serviceId;        // 服务ID (如 "urn:upnp-org:serviceId:AVTransport")
+        QString scpdUrl;         // 服务描述文档URL
+        QString controlUrl;      // 控制URL
+        QString eventSubUrl;     // 事件订阅URL
+    };
+
+        // DLNA 设备信息结构体
+    struct DLNADeviceInfo {
+        // 基本设备信息
+        QString deviceType;           // 设备类型 (如 "urn:schemas-upnp-org:device:MediaRenderer:1")
+        QString friendlyName;         // 设备友好名称 (如 "小爱音箱-5204" 或 "月半的电视")
+        QString manufacturer;         // 制造商 (如 "Mi, Inc." 或 "Xiaomi")
+        QString manufacturerUrl;      // 制造商URL (如 "http://www.xiaomi.com/")
+        QString modelDescription;     // 型号描述 (如 "The Mi AI SoundBox" 或 "Xiaomi MediaRenderer")
+        QString modelName;           // 型号名称
+        QString modelNumber;         // 型号编号
+        QString modelUrl;            // 型号URL (如 "http://www.xiaomi.com/hezi")
+        QString presentationUrl;     // 展示URL
+        QString udn;                 // 唯一设备名称 (uuid)
+        QString upc;                 // 通用产品代码
+
+        // // 扩展信息
+        // struct ExtendedInfo {
+        //     QString qplayCapability;     // QPlay 能力 (小米设备特有)
+        //     QString dlnaDoc;             // DLNA 文档版本 (如 "DMR-1.50")
+        //     QString dlnaCap;             // DLNA 能力
+            
+        //     // RController 信息 (小米电视特有)
+        //     struct RControllerInfo {
+        //         QString version;         // 控制器版本
+        //         struct Service {
+        //             QString serviceType;     // 服务类型
+        //             QString actionListUrl;   // 动作列表URL
+        //         };
+        //         QList<Service> services;     // 控制器服务列表
+        //     } rController;
+        // } extendedInfo;
+
+        // 服务列表
+        QList<DLNAService> services;    // 设备提供的服务列表
+        QString urlBase;                // URL基础地址
+
+        DLNADeviceInfo() {}
+        DLNADeviceInfo(const QString& type, const QString& name, const QString& mfr,
+                    const QString& desc, const QString& model, const QString& number,
+                    const QString& id)
+            : deviceType(type), friendlyName(name), manufacturer(mfr),
+            modelDescription(desc), modelName(model), modelNumber(number),
+            udn(id) {}
+    };
+
     struct DLNADevice {
-        QString id;
-        QString name;
-        QString location;
-        QString type;
-        QHostAddress address;
-        quint16 port;
-        QDateTime lastSeen;
+        QString id; // 设备ID (uuid)
+        QString name; // 设备名称
+        QString location; // 设备位置URL
+        QString type; // 设备类型
+        QHostAddress address; // 设备IP地址
+        quint16 port; // 设备端口
+        QDateTime lastSeen; // 最后发现时间
+        DLNADeviceInfo info;     // 设备详细信息
 
         DLNADevice() : port(0) {}
         DLNADevice(const QString& _id, const QString& _name, const QString& _location)
-            : id(_id), name(_name), location(_location), port(0), lastSeen(QDateTime::currentDateTime()) {}
+        : id(_id), name(_name), location(_location), port(0), 
+          lastSeen(QDateTime::currentDateTime()) {}
     };
 
     explicit DLNAManager(QObject *parent = nullptr);

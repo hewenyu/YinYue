@@ -124,14 +124,14 @@ bool DLNAManager::connectToDevice(const QString& deviceId)
     const DLNADevice& device = m_devices[deviceId];
     qDebug() << "正在连接到设备:" << device.name;
     
-    // 验证设备是否有有��的控制URL
+    // 验证设备是否有有效的控制URL
     if (device.location.isEmpty()) {
         qDebug() << "设备控制URL为空";
         emit error(tr("Invalid device control URL"));
         return false;
     }
     
-    // 设置当前设备ID（在发送UPnP动作之前）
+    // 设当前设备ID（在发送UPnP动作之前）
     m_currentDeviceId = deviceId;
     
     // 尝试发送一个简单的UPnP动作来测试连接
@@ -248,7 +248,7 @@ void DLNAManager::sendSSDPByebye()
     NOTIFY * HTTP/1.1       // 消息头
     HOST:                   // 设置为协议保留多播地址和端口，必须是：239.255.255.250:1900（IPv4）或FF0x::C(IPv6
     NTS:                    // 表示通知消息的子类型，必须为ssdp:byebye
-    USN:                    // 表示不同服务的统一服务名，它提供了一种标识出相同类型服务的能力。如：
+    USN:                    // 表示不同服务的统一服务名，它提��了一种标识出相同类型服务的能力。如：
                             // 根/启动设备 uuid:f7001351-cf4f-4edd-b3df-4b04792d0e8a::upnp:rootdevice
                             // 连接管理器  uuid:f7001351-cf4f-4edd-b3df-4b04792d0e8a::urn:schemas-upnp-org:service:ConnectionManager:1
                             // 内容管理器 uuid:f7001351-cf4f-4edd-b3df-4b04792d0e8a::urn:schemas-upnp-org:service:ContentDirectory:1
@@ -280,7 +280,7 @@ QDEBUG : DLNATest::testDeviceDiscovery() 发现设备USN: " uuid:507b4406-58e3-4
 QDEBUG : DLNATest::testDeviceDiscovery() 处理设备: " uuid:507b4406-58e3-4463-95bf-6211f55f12a4"
 QDEBUG : DLNATest::testDeviceDiscovery() 设备地址: "192.168.199.106" : 1900
 QDEBUG : DLNATest::testDeviceDiscovery() 添加/更新设备: " uuid:507b4406-58e3-4463-95bf-6211f55f12a4"
-QDEBUG : DLNATest::testDeviceDiscovery() 新设备已发现: "Unknown Device"
+QDEBUG : DLNATest::testDeviceDiscovery() 新设备已��现: "Unknown Device"
 QDEBUG : DLNATest::testDeviceDiscovery() 信号等待结果: 成功
 QDEBUG : DLNATest::testDeviceDiscovery() 发现的设备数量: 2
 QDEBUG : DLNATest::testDeviceDiscovery() 设备: DLNADevice(id: " uuid:507b4406-58e3-4463-95bf-6211f55f12a4", name: "Unknown Device", location: " http://192.168.199.106:9999/507b4406-58e3-4463-95bf-6211f55f12a4.xml")
@@ -329,7 +329,7 @@ void DLNAManager::handleSSDPResponse()
                 existingDevice.lastSeen = QDateTime::currentDateTime();
                 if (location != existingDevice.location) {
                     existingDevice.location = location;
-                    fetchDeviceDescription(location);  // 获取更新的设备描述
+                    fetchDeviceDescription(location);  // 获取更新的���备描述
                 }
             } else {
                 // 创建新设备
@@ -355,7 +355,7 @@ void DLNAManager::handleSSDPResponse()
     描述文件有两种类型：设备描述文档(DDD)和服务描述文档(SDD)
     设备描述文档(DDD)：描述设备的基本信息，包括设备类型、制造商、型号、网络接口等。
     服务描述文档(SDD)：描述设备提供的服务，包括服务类型、控制URL、事件URL等。
-    设备描述采用XML格式，可以通过HTTP GET请求获取。其链接为设备发现消息中的Location。如上述设备的描述文件获取请求为
+    设备描述采用XML格式，可以通过HTTP GET请求获取。其链为设备发现消息中的Location。如上述设备的描述文件获取请求为
     http://192.168.199.106:9999/507b4406-58e3-4463-95bf-6211f55f12a4.xml
  */
 void DLNAManager::fetchDeviceDescription(const QString& location)
@@ -380,22 +380,21 @@ void DLNAManager::fetchDeviceDescription(const QString& location)
 void DLNAManager::parseDeviceDescription(const QByteArray& data)
 {
     QXmlStreamReader xml(data);
-    QString currentDeviceId; // 当前设备ID
-    QString deviceName; // 设备名称
-    QString controlURL; // 控制URL
-    QString serviceType; // 服务类型
-    QString serviceId; // 服务ID
-    QString eventSubURL; // 事件订阅URL
+    // 
+    DLNADevice device;
+    DLNADeviceInfo info;
+    QList<DLNAService>  serviceList;
+    
     /*
     serviceId : 必有字段。服务表示符，是服务实例的唯一标识。
-    serviceType : 必有字段。UPnP服务类型。格式定义与deviceType类此。详看文章开头表格。
-    SCPDURL : 必有字段。Service Control Protocol Description URL，获取设备描述文档URL。
+    serviceType : 必有字段UPnP服务类型。格式定义与deviceType类此。详看文章开头表格。
+    SCPDURL : 必有字段。Service Control Protocol Description URL，获取���备描述文档URL。
     controlURL : 必有字段。向服务发出控制消息的URL，详见 基于DLNA实现：SOAP控制设备
     eventSubURL : 必有字段。订阅该服务时间的URL，详见 基于DLNA实现：SOAP控制设备
      */
 
     // 输出xml
-    qDebug() << "解析设备描述:" << QString::fromUtf8(data);
+    // qDebug() << "解析设备描述:" << QString::fromUtf8(data);
      /*
     测试的xml
     "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<root\n    xmlns=\"urn:schemas-upnp-org:device-1-0\">\n    <specVersion>\n        <major>1</major>\n        <minor>1</minor>\n    </specVersion>\n    <device>\n        <deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>\n        <friendlyName>小爱音箱-5204</friendlyName>\n        <manufacturer>Mi, Inc.</manufacturer>\n        <modelDescription>The Mi AI SoundBox</modelDescription>\n        <modelName>S12</modelName>\n        <modelNumber>S12</modelNumber>\n        <qq:X_QPlay_SoftwareCapability\n            xmlns:qq=\"http://www.tencent.com\">QPlay:2\n        </qq:X_QPlay_SoftwareCapability>\n        <dlna:X_DLNADOC\n            xmlns:dlna=\"urn:schemas-dlna-org:device-1-0\">DMR-1.50\n        </dlna:X_DLNADOC>\n        <dlna:X_DLNACAP\n            xmlns:dlna=\"urn:schemas-dlna-org:device-1-0\">,\n        </dlna:X_DLNACAP>\n        <UDN>uuid:507b4406-58e3-4463-95bf-6211f55f12a4</UDN>\n        <serviceList>\n            <service>\n                <serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>\n                <serviceId>urn:upnp-org:serviceId:AVTransport</serviceId>\n                <SCPDURL>AVTransport1.xml</SCPDURL>\n                <controlURL>/AVTransport/control</controlURL>\n                <eventSubURL>/AVTransport/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:schemas-upnp-org:service:ConnectionManager:1</serviceType>\n                <serviceId>urn:upnp-org:serviceId:ConnectionManager</serviceId>\n                <SCPDURL>ConnectionManager1.xml</SCPDURL>\n                <controlURL>/ConnectionManager/control</controlURL>\n                <eventSubURL>/ConnectionManager/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:schemas-upnp-org:service:RenderingControl:1</serviceType>\n                <serviceId>urn:upnp-org:serviceId:RenderingControl</serviceId>\n                <SCPDURL>RenderingControl1.xml</SCPDURL>\n                <controlURL>/RenderingControl/control</controlURL>\n                <eventSubURL>/RenderingControl/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:xiaomi-com:service:Queue:1</serviceType>\n                <serviceId>urn:xiaomi-com:serviceId:Queue</serviceId>\n                <SCPDURL>Queue1.xml</SCPDURL>\n                <controlURL>Queue1/control</controlURL>\n                <eventSubURL>Queue1/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:xiaomi-com:service:Playlist:1</serviceType>\n                <serviceId>urn:xiaomi-com:serviceId:Playlist</serviceId>\n                <SCPDURL>Playlist1.xml</SCPDURL>\n                <controlURL>Playlist1/control</controlURL>\n                <eventSubURL>Playlist1/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:schemas-tencent-com:service:QPlay:1</serviceType>\n                <serviceId>urn:tencent-com:serviceId:QPlay</serviceId>\n                <SCPDURL>QPlay1.xml</SCPDURL>\n                <controlURL>QPlay1/control</controlURL>\n                <eventSubURL>QPlay1/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:xiaomi-com:service:Favorites:1</serviceType>\n                <serviceId>urn:xiaomi-com:serviceId:Favorites</serviceId>\n                <SCPDURL>Favorites1.xml</SCPDURL>\n                <controlURL>Favorites1/control</controlURL>\n                <eventSubURL>Favorites1/event</eventSubURL>\n            </service>\n        </serviceList>\n    </device>\n</root>\n"
@@ -403,28 +402,42 @@ void DLNAManager::parseDeviceDescription(const QByteArray& data)
     while (!xml.atEnd() && !xml.hasError()) {
         QXmlStreamReader::TokenType token = xml.readNext();
 
-        // 
-        
-        // 获取serviceId
-        if (token == QXmlStreamReader::StartElement && xml.name() == "serviceId") {
-            serviceId = xml.readElementText();
-            qDebug() << "发现服务ID:" << serviceId;
-        }
-        // 获取serviceType
-        if (token == QXmlStreamReader::StartElement && xml.name() == "serviceType") {
-            serviceType = xml.readElementText();
-            qDebug() << "发现服务类型:" << serviceType;
-        }
-        // 获取controlURL
-        if (token == QXmlStreamReader::StartElement && xml.name() == "controlURL") {
-            controlURL = xml.readElementText();
-            qDebug() << "发现控制URL:" << controlURL;
-        }   
-        // 获取eventSubURL
-        if (token == QXmlStreamReader::StartElement && xml.name() == "eventSubURL") {
-            eventSubURL = xml.readElementText();
-            qDebug() << "发现事件订阅URL:" << eventSubURL;
-        }
+       // 根据结构体填充信息
+       // 解析xml 写入DLNADeviceInfo
+       if (token == QXmlStreamReader::StartElement && xml.name() == "device") {
+            device.id = xml.attributes().value("UDN").toString();
+       }
+       if (token == QXmlStreamReader::StartElement && xml.name() == "friendlyName") {
+            device.name = xml.readElementText();
+       }
+       if (token == QXmlStreamReader::StartElement && xml.name() == "serviceList") {
+            // 遍历services ,serviceList append 到serviceList
+            // serviceId : 必有字段。服务表示符，是服务实例的唯一标识。
+            // serviceType : 必有字段UPnP服务类型。格式定义与deviceType类此。详看文章开头表格。
+            // SCPDURL : 必有字段。Service Control Protocol Description URL，获取设备描述文档URL。
+            // controlURL : 必有字段。向服务发出控制消息的URL，详见 基于DLNA实现：SOAP控制设备
+            // eventSubURL : 必有字段。订阅该服务时间的URL，详见 基于DLNA实现：SOAP控制设备           
+            while (xml.readNextStartElement()) {
+                if (xml.name() == "service") {
+                    DLNAService service;
+                    if (xml.name() == "serviceType" || xml.name() == "serviceId" || xml.name() == "SCPDURL" || 
+                        xml.name() == "controlURL" || xml.name() == "eventSubURL") {
+                        service.serviceType = xml.readElementText().simplified();
+                        service.serviceId = xml.readElementText().simplified();
+                        service.scpdUrl = xml.readElementText().simplified();
+                        service.controlUrl = xml.readElementText().simplified();
+                        service.eventSubUrl = xml.readElementText().simplified();
+                        serviceList.append(service);
+                    } else {
+                        xml.skipCurrentElement();
+                    }
+                } else {
+                    xml.skipCurrentElement();
+                }
+            }
+       }
+       // 释放临时参数
+
     }
     
     if (xml.hasError()) {
