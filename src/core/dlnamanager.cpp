@@ -299,9 +299,9 @@ void DLNAManager::handleSSDPResponse()
         qDebug() << "收到SSDP响应:\n" << response;
 
         // 解析设备信息
-        QString location = extractHeader(response, "LOCATION");
-        QString st = extractHeader(response, "ST");
-        QString usn = extractHeader(response, "USN");
+        QString location = extractHeader(response, "LOCATION").simplified();
+        QString st = extractHeader(response, "ST").simplified();
+        QString usn = extractHeader(response, "USN").simplified();
 
         if (!location.isEmpty()) {
             qDebug() << "发现设备位置:" << location;
@@ -311,9 +311,9 @@ void DLNAManager::handleSSDPResponse()
             // 提取设备ID
             QString deviceId;
             if (usn.contains("::")) {
-                deviceId = usn.split("::").first();
+                deviceId = usn.split("::").first().simplified();
             } else {
-                deviceId = usn;
+                deviceId = usn.simplified();
             }
             qDebug() << "处理设备:" << deviceId;
 
@@ -334,6 +334,7 @@ void DLNAManager::handleSSDPResponse()
             } else {
                 // 创建新设备
                 DLNADevice newDevice;
+                // 需要去除前后空格
                 newDevice.id = deviceId;
                 newDevice.name = "Unknown Device";  // 临时名称
                 newDevice.location = location;
