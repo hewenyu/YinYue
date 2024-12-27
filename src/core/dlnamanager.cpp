@@ -384,7 +384,8 @@ void DLNAManager::parseDeviceDescription(const QByteArray& data)
     QString deviceName; // 设备名称
     QString controlURL; // 控制URL
     QString serviceType; // 服务类型
-
+    QString serviceId; // 服务ID
+    QString eventSubURL; // 事件订阅URL
     /*
     serviceId : 必有字段。服务表示符，是服务实例的唯一标识。
     serviceType : 必有字段。UPnP服务类型。格式定义与deviceType类此。详看文章开头表格。
@@ -395,56 +396,34 @@ void DLNAManager::parseDeviceDescription(const QByteArray& data)
 
     // 输出xml
     qDebug() << "解析设备描述:" << QString::fromUtf8(data);
+     /*
+    测试的xml
+    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<root\n    xmlns=\"urn:schemas-upnp-org:device-1-0\">\n    <specVersion>\n        <major>1</major>\n        <minor>1</minor>\n    </specVersion>\n    <device>\n        <deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>\n        <friendlyName>小爱音箱-5204</friendlyName>\n        <manufacturer>Mi, Inc.</manufacturer>\n        <modelDescription>The Mi AI SoundBox</modelDescription>\n        <modelName>S12</modelName>\n        <modelNumber>S12</modelNumber>\n        <qq:X_QPlay_SoftwareCapability\n            xmlns:qq=\"http://www.tencent.com\">QPlay:2\n        </qq:X_QPlay_SoftwareCapability>\n        <dlna:X_DLNADOC\n            xmlns:dlna=\"urn:schemas-dlna-org:device-1-0\">DMR-1.50\n        </dlna:X_DLNADOC>\n        <dlna:X_DLNACAP\n            xmlns:dlna=\"urn:schemas-dlna-org:device-1-0\">,\n        </dlna:X_DLNACAP>\n        <UDN>uuid:507b4406-58e3-4463-95bf-6211f55f12a4</UDN>\n        <serviceList>\n            <service>\n                <serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>\n                <serviceId>urn:upnp-org:serviceId:AVTransport</serviceId>\n                <SCPDURL>AVTransport1.xml</SCPDURL>\n                <controlURL>/AVTransport/control</controlURL>\n                <eventSubURL>/AVTransport/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:schemas-upnp-org:service:ConnectionManager:1</serviceType>\n                <serviceId>urn:upnp-org:serviceId:ConnectionManager</serviceId>\n                <SCPDURL>ConnectionManager1.xml</SCPDURL>\n                <controlURL>/ConnectionManager/control</controlURL>\n                <eventSubURL>/ConnectionManager/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:schemas-upnp-org:service:RenderingControl:1</serviceType>\n                <serviceId>urn:upnp-org:serviceId:RenderingControl</serviceId>\n                <SCPDURL>RenderingControl1.xml</SCPDURL>\n                <controlURL>/RenderingControl/control</controlURL>\n                <eventSubURL>/RenderingControl/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:xiaomi-com:service:Queue:1</serviceType>\n                <serviceId>urn:xiaomi-com:serviceId:Queue</serviceId>\n                <SCPDURL>Queue1.xml</SCPDURL>\n                <controlURL>Queue1/control</controlURL>\n                <eventSubURL>Queue1/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:xiaomi-com:service:Playlist:1</serviceType>\n                <serviceId>urn:xiaomi-com:serviceId:Playlist</serviceId>\n                <SCPDURL>Playlist1.xml</SCPDURL>\n                <controlURL>Playlist1/control</controlURL>\n                <eventSubURL>Playlist1/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:schemas-tencent-com:service:QPlay:1</serviceType>\n                <serviceId>urn:tencent-com:serviceId:QPlay</serviceId>\n                <SCPDURL>QPlay1.xml</SCPDURL>\n                <controlURL>QPlay1/control</controlURL>\n                <eventSubURL>QPlay1/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:xiaomi-com:service:Favorites:1</serviceType>\n                <serviceId>urn:xiaomi-com:serviceId:Favorites</serviceId>\n                <SCPDURL>Favorites1.xml</SCPDURL>\n                <controlURL>Favorites1/control</controlURL>\n                <eventSubURL>Favorites1/event</eventSubURL>\n            </service>\n        </serviceList>\n    </device>\n</root>\n"
+     */
     while (!xml.atEnd() && !xml.hasError()) {
         QXmlStreamReader::TokenType token = xml.readNext();
+
+        // 
         
-        if (token == QXmlStreamReader::StartElement) {
-            if (xml.name() == "device") {
-                // 重置设备信息
-                currentDeviceId.clear();
-                deviceName.clear();
-            }
-            else if (xml.name() == "UDN") {
-                currentDeviceId = xml.readElementText();
-            }
-            else if (xml.name() == "friendlyName") {
-                deviceName = xml.readElementText();
-                if (!currentDeviceId.isEmpty() && m_devices.contains(currentDeviceId)) {
-                    DLNADevice& device = m_devices[currentDeviceId];
-                    device.name = deviceName;
-                    qDebug() << "设备名称已更新:" << deviceName;
-                    emit deviceDiscovered(device.id, device.name);
-                }
-            }
-            else if (xml.name() == "serviceType") {
-                serviceType = xml.readElementText();
-            }
-            else if (xml.name() == "controlURL") {
-                controlURL = xml.readElementText();
-                qDebug() << "找到控制URL:" << controlURL << "服务类型:" << serviceType;
-                
-                if (serviceType.contains("AVTransport")) {
-                    qDebug() << "找到 AVTransport 服务控制 URL:" << controlURL;
-                    if (!currentDeviceId.isEmpty() && m_devices.contains(currentDeviceId)) {
-                        DLNADevice& device = m_devices[currentDeviceId];
-                        // 更新设备的控制URL
-                        if (!controlURL.startsWith("http")) {
-                            QUrl baseUrl(device.location);
-                            QString basePath = baseUrl.path();
-                            basePath = basePath.left(basePath.lastIndexOf('/') + 1);
-                            controlURL = QString("%1://%2:%3%4%5")
-                                .arg(baseUrl.scheme())
-                                .arg(baseUrl.host())
-                                .arg(baseUrl.port())
-                                .arg(basePath)
-                                .arg(controlURL);
-                        }
-                        device.location = controlURL;
-                        qDebug() << "设备信息:" << device.id << device.name << device.location;
-                        emit deviceDiscovered(device.id, device.name);
-                    }
-                }
-            }
+        // 获取serviceId
+        if (token == QXmlStreamReader::StartElement && xml.name() == "serviceId") {
+            serviceId = xml.readElementText();
+            qDebug() << "发现服务ID:" << serviceId;
+        }
+        // 获取serviceType
+        if (token == QXmlStreamReader::StartElement && xml.name() == "serviceType") {
+            serviceType = xml.readElementText();
+            qDebug() << "发现服务类型:" << serviceType;
+        }
+        // 获取controlURL
+        if (token == QXmlStreamReader::StartElement && xml.name() == "controlURL") {
+            controlURL = xml.readElementText();
+            qDebug() << "发现控制URL:" << controlURL;
+        }   
+        // 获取eventSubURL
+        if (token == QXmlStreamReader::StartElement && xml.name() == "eventSubURL") {
+            eventSubURL = xml.readElementText();
+            qDebug() << "发现事件订阅URL:" << eventSubURL;
         }
     }
     
