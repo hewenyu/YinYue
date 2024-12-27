@@ -329,7 +329,7 @@ void DLNAManager::handleSSDPResponse()
                 existingDevice.lastSeen = QDateTime::currentDateTime();
                 if (location != existingDevice.location) {
                     existingDevice.location = location;
-                    fetchDeviceDescription(location);  // 获取更新的���备描述
+                    fetchDeviceDescription(location);  // 获取更新的s设备描述
                 }
             } else {
                 // 创建新设备
@@ -377,11 +377,13 @@ void DLNAManager::fetchDeviceDescription(const QString& location)
 }
 
 // 从 m_devices 更新设备信息
-void DLNAManager::updateDeviceInfo(const QString& deviceId, const DLNADeviceInfo& info)
+void DLNAManager::updateDeviceInfo(const QString& deviceId, const DLNADevice& device)
 {
     if (m_devices.contains(deviceId)) {
-        m_devices[deviceId].info = info;
-        qDebug() << "更新设备信息:" << deviceId << info.friendlyName;
+        DLNADevice& existingDevice = m_devices[deviceId];
+        existingDevice.info = device.info;
+        existingDevice.name = device.info.friendlyName;
+        qDebug() << "更新设备信息:" << deviceId << device.info.friendlyName;
     }
 }
 
@@ -389,10 +391,12 @@ void DLNAManager::updateDeviceInfo(const QString& deviceId, const DLNADeviceInfo
 void DLNAManager::parseDeviceDescription(const QByteArray& data)
 {
     QXmlStreamReader xml(data);
-    // 
+    // new device
     DLNADevice device;
     DLNADeviceInfo info;
     QList<DLNAService>  serviceList;
+    // 更新现有设备的信息，但保留名称等已知信息
+    // existingDevice    
     
     /*
     serviceId : 必有字段。服务表示符，是服务实例的唯一标识。
@@ -416,10 +420,9 @@ void DLNAManager::parseDeviceDescription(const QByteArray& data)
         if (token == QXmlStreamReader::StartElement && xml.name() == "device") {
             device.id = xml.attributes().value("UDN").toString().simplified();
         }else{
-            continue;
+            break;
         }
         
-
         if (token == QXmlStreamReader::StartElement && xml.name() == "friendlyName") {
             device.name = xml.readElementText().simplified();
         }
@@ -473,11 +476,11 @@ void DLNAManager::parseDeviceDescription(const QByteArray& data)
             }
             info.services = serviceList;
         }
-        // updateDeviceInfo
-        updateDeviceInfo(device.id, info);
+        
     }
-    // 更新设备信息
-    m_devices[device.id] = device;
+    // updateDeviceInfo
+    updateDeviceInfo(device.id, device);
+
     if (xml.hasError()) {
         qDebug() << "XML解析错误:" << xml.errorString();
     }

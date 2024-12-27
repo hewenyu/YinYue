@@ -124,12 +124,16 @@ void DLNATest::testDeviceDiscovery()
     qDebug() << "设备数量:" << devices.size();
 
 
-    while (devices.size() == 2)
+    while (devices.size() != 2)
     {
         qDebug() << "等待设备发现...";
         devices = m_dlnaManager->getAvailableDevices();
         qDebug() << "设备数量:" << devices.size();
         sleep(1);
+        if (devices.size() == 2)
+        {
+            break;
+        }
     }
     
     // 验证设备列表

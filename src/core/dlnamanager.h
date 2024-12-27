@@ -93,7 +93,7 @@ public:
     ~DLNAManager();
 
     // 更新设备信息
-    void updateDeviceInfo(const QString& deviceId, const DLNADeviceInfo& info);
+    void updateDeviceInfo(const QString& deviceId, const DLNADevice& info);
 
     void startDiscovery();
     void stopDiscovery();
