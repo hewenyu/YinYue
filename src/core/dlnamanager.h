@@ -59,7 +59,8 @@ signals:
 
 private slots:
     void handleSSDPResponse();
-    void sendSSDPDiscover();
+    void sendSSDPDiscover(); // 发送发现消息
+    void sendSSDPByebye(); // 发送byebye消息
     void checkDeviceTimeouts();
     void checkPlaybackState();
     void handleUPnPResponse(QNetworkReply* reply);

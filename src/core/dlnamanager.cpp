@@ -85,6 +85,8 @@ void DLNAManager::startDiscovery()
 void DLNAManager::stopDiscovery()
 {
     qDebug() << "Stopping DLNA device discovery";
+    // 发送byebye消息
+    sendSSDPByebye();
     m_discoveryTimer->stop();  // 停止发现定时器
     m_timeoutTimer->stop();   // 停止超时检查定时器
 }
@@ -184,6 +186,7 @@ QString DLNAManager::getCurrentDeviceId() const
     return m_currentDeviceId;
 }
 
+
 void DLNAManager::sendSSDPDiscover()
 {
     // 当设备添加到网络后，定期向（239.255.255.250:1900）发送SSDP通知消息宣告自己的设备和服务。
@@ -202,11 +205,7 @@ void DLNAManager::sendSSDPDiscover()
                                 // 连接管理器  uuid:f7001351-cf4f-4edd-b3df-4b04792d0e8a::urn:schemas-upnp-org:service:ConnectionManager:1
                                 // 内容管理器 uuid:f7001351-cf4f-4edd-b3df-4b04792d0e8a::urn:schemas-upnp-org:service:ContentDirectory:1
 
-    ssdp:byebye 消息格式
-    NOTIFY * HTTP/1.1       // 消息头
-    HOST:                   // 设置为协议保留多播地址和端口，必须是：239.255.255.250:1900（IPv4）或FF0x::C(IPv6
-    NTS:                    // 表示通知消息的子类型，必须为ssdp:byebye
-    USN:                    // 同上
+   
     */
 
 
@@ -241,17 +240,60 @@ void DLNAManager::sendSSDPDiscover()
     m_ssdpSocket->writeDatagram(ssdpRequest, SSDP_MULTICAST_ADDR, SSDP_PORT);
 }
 
+// / sendSSDPByebye
+void DLNAManager::sendSSDPByebye()
+{
+    /*
+    ssdp:byebye 消息格式
+    NOTIFY * HTTP/1.1       // 消息头
+    HOST:                   // 设置为协议保留多播地址和端口，必须是：239.255.255.250:1900（IPv4）或FF0x::C(IPv6
+    NTS:                    // 表示通知消息的子类型，必须为ssdp:byebye
+    USN:                    // 表示不同服务的统一服务名，它提供了一种标识出相同类型服务的能力。如：
+                            // 根/启动设备 uuid:f7001351-cf4f-4edd-b3df-4b04792d0e8a::upnp:rootdevice
+                            // 连接管理器  uuid:f7001351-cf4f-4edd-b3df-4b04792d0e8a::urn:schemas-upnp-org:service:ConnectionManager:1
+                            // 内容管理器 uuid:f7001351-cf4f-4edd-b3df-4b04792d0e8a::urn:schemas-upnp-org:service:ContentDirectory:1
+    */
+    QByteArray ssdpRequest = 
+        "NOTIFY * HTTP/1.1\r\n"
+        "HOST: 239.255.255.250:1900\r\n"
+        "NTS: ssdp:byebye\r\n"
+        "USN: " + DLNAManager::UPnP_MediaRenderer.toUtf8() + "\r\n"
+        "\r\n";
+}
+
 // 处理SSDP响应
+/*
+    QDEBUG : DLNATest::testDeviceDiscovery() 收到SSDP响应:
+
+QDEBUG : DLNATest::testDeviceDiscovery() 发现设备USN: " uuid:a3fc6529-5b62-d12e-cfe1-f4546e07a920::urn:schemas-upnp-org:device:MediaRenderer:1"
+QDEBUG : DLNATest::testDeviceDiscovery() 处理设备: " uuid:a3fc6529-5b62-d12e-cfe1-f4546e07a920"
+QDEBUG : DLNATest::testDeviceDiscovery() 设备地址: "192.168.199.124" : 20549
+QDEBUG : DLNATest::testDeviceDiscovery() 添加/更新设备: " uuid:a3fc6529-5b62-d12e-cfe1-f4546e07a920"
+QDEBUG : DLNATest::testDeviceDiscovery() 新设备已发现: "Unknown Device"
+QDEBUG : DLNATest::testDeviceDiscovery() 收到SSDP响应:
+ "HTTP/1.1 200 OK\r\nLocation: http://192.168.199.106:9999/507b4406-58e3-4463-95bf-6211f55f12a4.xml\r\nExt:\r\nUSN: uuid:507b4406-58e3-4463-95bf-6211f55f12a4::urn:schemas-upnp-org:device:MediaRenderer:1\r\nServer: Linux/4.9.61 UPnP/1.0 GUPnP/1.0.2\r\nCache-Control: max-age=1800\r\nST: urn:schemas-upnp-org:device:MediaRenderer:1\r\nDate: Fri, 27 Dec 2024 05:41:49 GMT\r\nContent-Length: 0\r\n\r\n"
+QDEBUG : DLNATest::testDeviceDiscovery() 发现设备位置: " http://192.168.199.106:9999/507b4406-58e3-4463-95bf-6211f55f12a4.xml"
+QDEBUG : DLNATest::testDeviceDiscovery() 发现设备类型: " urn:schemas-upnp-org:device:MediaRenderer:1"
+QDEBUG : DLNATest::testDeviceDiscovery() 发现设备USN: " uuid:507b4406-58e3-4463-95bf-6211f55f12a4::urn:schemas-upnp-org:device:MediaRenderer:1"
+QDEBUG : DLNATest::testDeviceDiscovery() 处理设备: " uuid:507b4406-58e3-4463-95bf-6211f55f12a4"
+QDEBUG : DLNATest::testDeviceDiscovery() 设备地址: "192.168.199.106" : 1900
+QDEBUG : DLNATest::testDeviceDiscovery() 添加/更新设备: " uuid:507b4406-58e3-4463-95bf-6211f55f12a4"
+QDEBUG : DLNATest::testDeviceDiscovery() 新设备已发现: "Unknown Device"
+QDEBUG : DLNATest::testDeviceDiscovery() 信号等待结果: 成功
+QDEBUG : DLNATest::testDeviceDiscovery() 发现的设备数量: 2
+QDEBUG : DLNATest::testDeviceDiscovery() 设备: DLNADevice(id: " uuid:507b4406-58e3-4463-95bf-6211f55f12a4", name: "Unknown Device", location: " http://192.168.199.106:9999/507b4406-58e3-4463-95bf-6211f55f12a4.xml")
+QDEBUG : DLNATest::testDeviceDiscovery() 设备: DLNADevice(id: " uuid:a3fc6529-5b62-d12e-cfe1-f4546e07a920", name: "Unknown Device", location: " http://192.168.199.124:49152/description.xml")
+ */
 void DLNAManager::handleSSDPResponse()
 {
     while (m_ssdpSocket->hasPendingDatagrams()) {
-        QByteArray datagram;
-        datagram.resize(m_ssdpSocket->pendingDatagramSize());
-        QHostAddress senderAddress;
-        quint16 senderPort;
+        QByteArray datagram; // 接收到的数据包  
+        datagram.resize(m_ssdpSocket->pendingDatagramSize()); // 设置数据包大小
+        QHostAddress senderAddress; // 发送者的地址
+        quint16 senderPort; // 发送者的端口
 
-        m_ssdpSocket->readDatagram(datagram.data(), datagram.size(), &senderAddress, &senderPort);
-        QString response = QString::fromUtf8(datagram);
+        m_ssdpSocket->readDatagram(datagram.data(), datagram.size(), &senderAddress, &senderPort); // 读取数据包
+        QString response = QString::fromUtf8(datagram); // 将数据包转换为字符串     
         qDebug() << "收到SSDP响应:\n" << response;
 
         // 解析设备信息
@@ -305,11 +347,19 @@ void DLNAManager::handleSSDPResponse()
     }
 }
 
+// 获取设备描述
+/*
+    描述文件有两种类型：设备描述文档(DDD)和服务描述文档(SDD)
+    设备描述文档(DDD)：描述设备的基本信息，包括设备类型、制造商、型号、网络接口等。
+    服务描述文档(SDD)：描述设备提供的服务，包括服务类型、控制URL、事件URL等。
+    设备描述采用XML格式，可以通过HTTP GET请求获取。其链接为设备发现消息中的Location。如上述设备的描述文件获取请求为
+    http://192.168.199.106:9999/507b4406-58e3-4463-95bf-6211f55f12a4.xml
+ */
 void DLNAManager::fetchDeviceDescription(const QString& location)
 {
     QUrl url(location);
     QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::UserAgentHeader, "YinYue/1.0");
+    request.setHeader(QNetworkRequest::UserAgentHeader, "YinYue/1.0"); // 设置用户代理
     
     QNetworkReply* reply = m_networkManager->get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply, location]() {
@@ -323,14 +373,25 @@ void DLNAManager::fetchDeviceDescription(const QString& location)
     });
 }
 
+// 解析设备描述
 void DLNAManager::parseDeviceDescription(const QByteArray& data)
 {
     QXmlStreamReader xml(data);
-    QString currentDeviceId;
-    QString deviceName;
-    QString controlURL;
-    QString serviceType;
-    
+    QString currentDeviceId; // 当前设备ID
+    QString deviceName; // 设备名称
+    QString controlURL; // 控制URL
+    QString serviceType; // 服务类型
+
+    /*
+    serviceId : 必有字段。服务表示符，是服务实例的唯一标识。
+    serviceType : 必有字段。UPnP服务类型。格式定义与deviceType类此。详看文章开头表格。
+    SCPDURL : 必有字段。Service Control Protocol Description URL，获取设备描述文档URL。
+    controlURL : 必有字段。向服务发出控制消息的URL，详见 基于DLNA实现：SOAP控制设备
+    eventSubURL : 必有字段。订阅该服务时间的URL，详见 基于DLNA实现：SOAP控制设备
+     */
+
+    // 输出xml
+    qDebug() << "解析设备描述:" << QString::fromUtf8(data);
     while (!xml.atEnd() && !xml.hasError()) {
         QXmlStreamReader::TokenType token = xml.readNext();
         
