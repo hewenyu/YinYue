@@ -190,6 +190,10 @@ void MainWindow::on_dlnaDeviceList_itemDoubleClicked(QListWidgetItem *item)
 
 void MainWindow::handleDLNADeviceDiscovered(const QString& deviceId, const QString& deviceName)
 {
+    qDebug() << "\n处理DLNA设备发现:";
+    qDebug() << "  设备ID:" << deviceId;
+    qDebug() << "  设备名称:" << deviceName;
+    
     // 添加或更新设备列表
     m_dlnaDeviceMap[deviceId] = deviceName;
     updateDLNADeviceList();
@@ -227,9 +231,16 @@ void MainWindow::handleDLNAError(const QString& error)
 
 void MainWindow::updateDLNADeviceList()
 {
+    qDebug() << "\n更新DLNA设备列表:";
+    qDebug() << "当前设备数量:" << m_dlnaDeviceMap.size();
+    
     ui->dlnaDeviceList->clear();
     
     for (auto it = m_dlnaDeviceMap.constBegin(); it != m_dlnaDeviceMap.constEnd(); ++it) {
+        qDebug() << "  添加设备到列表:";
+        qDebug() << "    ID:" << it.key();
+        qDebug() << "    名称:" << it.value();
+        
         QListWidgetItem *item = new QListWidgetItem(it.value(), ui->dlnaDeviceList);
         item->setData(Qt::UserRole, it.key());  // 存储设备ID
     }
@@ -237,6 +248,7 @@ void MainWindow::updateDLNADeviceList()
 
 void MainWindow::clearDLNADeviceList()
 {
+    qDebug() << "清空DLNA设备列表";
     ui->dlnaDeviceList->clear();
     m_dlnaDeviceMap.clear();
 }

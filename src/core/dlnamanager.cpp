@@ -93,11 +93,15 @@ void DLNAManager::stopDiscovery()
 
 QList<DLNAManager::DLNADevice> DLNAManager::getAvailableDevices() const
 {
-    // 打印发现的设备列表
     QList<DLNAManager::DLNADevice> devices = m_devices.values();
-    qDebug() << "发现的设备数量:" << devices.size();
+    qDebug() << "\n当前可用设备列表:";
+    qDebug() << "设备数量:" << devices.size();
     for (const auto& device : devices) {
-        qDebug() << "设备:" << device;
+        qDebug() << "  设备ID:" << device.id;
+        qDebug() << "  设备名称:" << device.name;
+        qDebug() << "  设备位置:" << device.location;
+        qDebug() << "  设备类型:" << device.type;
+        qDebug() << "";
     }
     return devices;
 }
@@ -194,7 +198,7 @@ void DLNAManager::sendSSDPDiscover()
     ssdp:alive 消息格式
 
     NOTIFY * HTTP/1.1           // 消息头
-    NT:                         // 在此消息中，NT头必须为服务的服务类型。（如：upnp:rootdevice）
+    NT:                         // 在此消息中，NT必须为服务的服务类型。（如：upnp:rootdevice）
     HOST:                       // 设置为协议保留多播地址和端口，必须是：239.255.255.250:1900（IPv4）或FF0x::C(IPv6
     NTS:                        // 表示通知消息的子类型，必须为ssdp:alive
     LOCATION:                   // 包含根设备描述得URL地址  device 的webservice路径（如：http://127.0.0.1:2351/1.xml)
@@ -210,14 +214,14 @@ void DLNAManager::sendSSDPDiscover()
 
 
    /*
-    一般情况我们使用多播搜索消息来搜索所有设备即可。多播搜索消息如下：
+    一般情况我们使用多播搜索消息来搜索有设备即可。多播搜索消息如下：
     M-SEARCH * HTTP/1.1             // 请求头 不可改变
     MAN: "ssdp:discover"            // 设置协议查询的类型，必须是：ssdp:discover
     MX: 5                           // 设置设备响应最长等待时间，设备响应在0和这个值之间随机选择响应延迟的值。这样可以为控制点响应平衡网络负载。
     HOST: 239.255.255.250:1900      // 设置为协议保留多播地址和端口，必须是：239.255.255.250:1900（IPv4）或FF0x::C(IPv6
     ST: upnp:rootdevice             // 设置服务查询的目标，它必须是下面的类型：
                                     // ssdp:all  搜索所有设备和服务
-                                    // upnp:rootdevice  仅搜索网络中的根设备
+                                    // upnp:rootdevice  仅搜索网络中的��设备
                                     // uuid:device-UUID  查询UUID标识的设备
                                     // urn:schemas-upnp-org:device:device-Type:version  查询device-Type字段指定的设备类型，设备类型和版本由UPNP组织定义。
                                     // urn:schemas-upnp-org:service:service-Type:version  查询service-Type字段指定的服务类型，服务类型和版本由UPNP组织定义。
@@ -226,7 +230,7 @@ void DLNAManager::sendSSDPDiscover()
 
     // 如果需要实现投屏，则设备类型 ST 为 urn:schemas-upnp-org:service:AVTransport:1
 
-    // 搜索音频设备
+    // 搜索视频设备
     // 发送通用 MediaRenderer 搜索
     QByteArray ssdpRequest = 
         "M-SEARCH * HTTP/1.1\r\n"
@@ -248,7 +252,7 @@ void DLNAManager::sendSSDPByebye()
     NOTIFY * HTTP/1.1       // 消息头
     HOST:                   // 设置为协议保留多播地址和端口，必须是：239.255.255.250:1900（IPv4）或FF0x::C(IPv6
     NTS:                    // 表示通知消息的子类型，必须为ssdp:byebye
-    USN:                    // 表示不同服务的统一服务名，它提供了一种标识出相同类型服务的能力。如：
+    USN:                    // 表示不同服务的统一服务名，它提供了一种标识出相同类型服务的能力。如
                             // 根/启动设备 uuid:f7001351-cf4f-4edd-b3df-4b04792d0e8a::upnp:rootdevice
                             // 连接管理器  uuid:f7001351-cf4f-4edd-b3df-4b04792d0e8a::urn:schemas-upnp-org:service:ConnectionManager:1
                             // 内容管理器 uuid:f7001351-cf4f-4edd-b3df-4b04792d0e8a::urn:schemas-upnp-org:service:ContentDirectory:1
@@ -289,13 +293,13 @@ QDEBUG : DLNATest::testDeviceDiscovery() 设备: DLNADevice(id: " uuid:a3fc6529-
 void DLNAManager::handleSSDPResponse()
 {
     while (m_ssdpSocket->hasPendingDatagrams()) {
-        QByteArray datagram; // 接收到的数据包  
-        datagram.resize(m_ssdpSocket->pendingDatagramSize()); // 设置数据包大小
-        QHostAddress senderAddress; // 发送者的地址
-        quint16 senderPort; // 发送者的端口
+        QByteArray datagram;
+        datagram.resize(m_ssdpSocket->pendingDatagramSize());
+        QHostAddress senderAddress;
+        quint16 senderPort;
 
-        m_ssdpSocket->readDatagram(datagram.data(), datagram.size(), &senderAddress, &senderPort); // 读取数据包
-        QString response = QString::fromUtf8(datagram); // 将数据包转换为字符串     
+        m_ssdpSocket->readDatagram(datagram.data(), datagram.size(), &senderAddress, &senderPort);
+        QString response = QString::fromUtf8(datagram);
         qDebug() << "收到SSDP响应:\n" << response;
 
         // 解析设备信息
@@ -322,21 +326,21 @@ void DLNAManager::handleSSDPResponse()
 
             // 检查是否已存在相同ID的设备
             if (m_devices.contains(deviceId)) {
-                // 更新现有设备的信息，但保留名称等已知信息
+                qDebug() << "更新现有设备:" << deviceId;
                 DLNADevice& existingDevice = m_devices[deviceId];
                 existingDevice.address = senderAddress;
                 existingDevice.port = senderPort;
                 existingDevice.lastSeen = QDateTime::currentDateTime();
-                if (location != existingDevice.location) {
-                    existingDevice.location = location;
-                    fetchDeviceDescription(location);  // 获取更新的s设备描述
-                }
+                
+                // 即使位置未变也重新获取设备描述，以确保名称正确
+                qDebug() << "重新获取设备描述";
+                existingDevice.location = location;
+                fetchDeviceDescription(location);
             } else {
-                // 创建新设备
+                qDebug() << "添加新设备:" << deviceId;
                 DLNADevice newDevice;
-                // 需要去除前后空格
                 newDevice.id = deviceId;
-                newDevice.name = "Unknown Device";  // 临时名称
+                newDevice.name = "Unknown Device";
                 newDevice.location = location;
                 newDevice.type = st;
                 newDevice.address = senderAddress;
@@ -344,8 +348,11 @@ void DLNAManager::handleSSDPResponse()
                 newDevice.lastSeen = QDateTime::currentDateTime();
                 
                 addDevice(newDevice);
-                fetchDeviceDescription(location);  // 获取设备描述
+                fetchDeviceDescription(location);
             }
+            
+            // 更新设备超时时间
+            m_deviceTimeouts[deviceId] = QDateTime::currentDateTime();
         }
     }
 }
@@ -360,100 +367,120 @@ void DLNAManager::handleSSDPResponse()
  */
 void DLNAManager::fetchDeviceDescription(const QString& location)
 {
+    qDebug() << "\n正在获取设备描述文件:" << location;
     QUrl url(location);
+    
+    if (!url.isValid()) {
+        qDebug() << "设备描述URL无效:" << location;
+        return;
+    }
+    
     QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::UserAgentHeader, "YinYue/1.0"); // 设置用户代理
+    request.setHeader(QNetworkRequest::UserAgentHeader, "YinYue/1.0");
+    
+    // 设置超时和缓存策略
+    request.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::AlwaysNetwork);
     
     QNetworkReply* reply = m_networkManager->get(request);
+    
+    // 设置超时定时器
+    QTimer* timeoutTimer = new QTimer(this);
+    timeoutTimer->setSingleShot(true);
+    timeoutTimer->setInterval(10000);  // 10秒总超时
+    
+    connect(timeoutTimer, &QTimer::timeout, this, [reply, location]() {
+        if (reply->isRunning()) {
+            qDebug() << "获取设备描述超时:" << location;
+            reply->abort();
+        }
+    });
+    
     connect(reply, &QNetworkReply::finished, this, [this, reply, location]() {
+        QTimer* timer = qobject_cast<QTimer*>(sender()->parent());
+        if (timer) {
+            timer->stop();
+            timer->deleteLater();
+        }
+        
         if (reply->error() == QNetworkReply::NoError) {
             QByteArray data = reply->readAll();
-            parseDeviceDescription(data);
+            qDebug() << "\n成功获取设备描述文件:";
+            qDebug() << "URL:" << location;
+            qDebug() << "内容长度:" << data.length() << "字节";
+            qDebug() << "内容:" << QString(data);
+            parseDeviceDescription(data, location);
         } else {
-            qDebug() << "获取设备描述失败:" << reply->errorString();
+            qDebug() << "\n获取设备描述失败:";
+            qDebug() << "URL:" << location;
+            qDebug() << "错误:" << reply->errorString();
+            qDebug() << "错误代码:" << reply->error();
+            qDebug() << "HTTP状态码:" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         }
         reply->deleteLater();
     });
+    
+    timeoutTimer->start();
 }
 
-// 从 m_devices 更新设备信息
-void DLNAManager::updateDeviceInfo(const DLNADevice& device)
+void DLNAManager::parseDeviceDescription(const QByteArray& data, const QString& location)
 {
-    if (m_devices.contains(device.id)) {
-        DLNADevice& existingDevice = m_devices[device.id];
-        existingDevice.info = device.info;
-        existingDevice.name = device.info.friendlyName;
-        qDebug() << "更新设备信息:" << existingDevice.id << existingDevice.info.friendlyName;
+    qDebug() << "\n开始解析设备描述文件";
+    
+    if (data.isEmpty()) {
+        qDebug() << "设备描述文件为空";
+        return;
     }
-}
-
-// 解析设备描述
-void DLNAManager::parseDeviceDescription(const QByteArray& data)
-{
+    
     QXmlStreamReader xml(data);
     DLNADeviceInfo info;
     QString deviceId;
+    bool foundDevice = false;
     
     while (!xml.atEnd() && !xml.hasError()) {
         QXmlStreamReader::TokenType token = xml.readNext();
         
         if (token == QXmlStreamReader::StartElement) {
-            if (xml.name() == "device") {
+            QString elementName = xml.name().toString();
+            qDebug() << "解析XML元素:" << elementName;
+            
+            if (elementName == "device") {
+                foundDevice = true;
                 // 解析设备基本信息
-                while (!xml.atEnd() && xml.readNextStartElement()) {
-                    if (xml.name() == "deviceType") {
-                        info.deviceType = xml.readElementText().trimmed();
-                    } else if (xml.name() == "friendlyName") {
-                        info.friendlyName = xml.readElementText().trimmed();
-                    } else if (xml.name() == "manufacturer") {
-                        info.manufacturer = xml.readElementText().trimmed();
-                    } else if (xml.name() == "manufacturerURL") {
-                        info.manufacturerUrl = xml.readElementText().trimmed();
-                    } else if (xml.name() == "modelDescription") {
-                        info.modelDescription = xml.readElementText().trimmed();
-                    } else if (xml.name() == "modelName") {
-                        info.modelName = xml.readElementText().trimmed();
-                    } else if (xml.name() == "modelNumber") {
-                        info.modelNumber = xml.readElementText().trimmed();
-                    } else if (xml.name() == "modelURL") {
-                        info.modelUrl = xml.readElementText().trimmed();
-                    } else if (xml.name() == "presentationURL") {
-                        info.presentationUrl = xml.readElementText().trimmed();
-                    } else if (xml.name() == "UDN") {
-                        info.udn = xml.readElementText().trimmed();
-                        deviceId = info.udn;  // 保存设备ID
-                    } else if (xml.name() == "UPC") {
-                        info.upc = xml.readElementText().trimmed();
-                    } else if (xml.name() == "serviceList") {
-                        // 解析服务列表
-                        while (xml.readNextStartElement()) {
-                            if (xml.name() == "service") {
-                                DLNAService service;
-                                while (xml.readNextStartElement()) {
-                                    if (xml.name() == "serviceType") {
-                                        service.serviceType = xml.readElementText().trimmed();
-                                    } else if (xml.name() == "serviceId") {
-                                        service.serviceId = xml.readElementText().trimmed();
-                                    } else if (xml.name() == "SCPDURL") {
-                                        service.scpdUrl = xml.readElementText().trimmed();
-                                    } else if (xml.name() == "controlURL") {
-                                        service.controlUrl = xml.readElementText().trimmed();
-                                    } else if (xml.name() == "eventSubURL") {
-                                        service.eventSubUrl = xml.readElementText().trimmed();
-                                    } else {
-                                        xml.skipCurrentElement();
-                                    }
-                                }
-                                // 添加服务到列表
-                                if (!service.serviceType.isEmpty()) {
-                                    info.services.append(service);
-                                }
-                            } else {
-                                xml.skipCurrentElement();
-                            }
+                while (!xml.atEnd()) {
+                    xml.readNext();
+                    
+                    if (xml.isStartElement()) {
+                        QString childName = xml.name().toString();
+                        QString value = xml.readElementText().trimmed();
+                        qDebug() << "  " << childName << "=" << value;
+                        
+                        if (childName == "deviceType")
+                            info.deviceType = value;
+                        else if (childName == "friendlyName") {
+                            info.friendlyName = value;
+                            qDebug() << "找到设备名称:" << value;
                         }
-                    } else {
-                        xml.skipCurrentElement();
+                        else if (childName == "manufacturer")
+                            info.manufacturer = value;
+                        else if (childName == "manufacturerURL")
+                            info.manufacturerUrl = value;
+                        else if (childName == "modelDescription")
+                            info.modelDescription = value;
+                        else if (childName == "modelName")
+                            info.modelName = value;
+                        else if (childName == "modelNumber")
+                            info.modelNumber = value;
+                        else if (childName == "modelURL")
+                            info.modelUrl = value;
+                        else if (childName == "presentationURL")
+                            info.presentationUrl = value;
+                        else if (childName == "UDN") {
+                            info.udn = value;
+                            deviceId = value;
+                            qDebug() << "找到设备ID:" << value;
+                        }
+                        else if (childName == "UPC")
+                            info.upc = value;
                     }
                 }
             }
@@ -461,7 +488,14 @@ void DLNAManager::parseDeviceDescription(const QByteArray& data)
     }
 
     if (xml.hasError()) {
-        qDebug() << "XML解析错误:" << xml.errorString();
+        qDebug() << "\nXML解析错误:";
+        qDebug() << "错误信息:" << xml.errorString();
+        qDebug() << "错误位置:" << xml.lineNumber() << "行," << xml.columnNumber() << "列";
+        return;
+    }
+
+    if (!foundDevice) {
+        qDebug() << "未找到device元素";
         return;
     }
 
@@ -469,20 +503,26 @@ void DLNAManager::parseDeviceDescription(const QByteArray& data)
     if (!deviceId.isEmpty() && m_devices.contains(deviceId)) {
         DLNADevice& device = m_devices[deviceId];
         device.info = info;
-        device.name = info.friendlyName;
         
-        // 更新服务映射
-        device.services.clear();
-        for (const auto& service : info.services) {
-            device.services[service.serviceType] = service;
+        // 只有在有效的friendlyName时才更新设备名称
+        if (!info.friendlyName.isEmpty()) {
+            device.name = info.friendlyName;
+            qDebug() << "\n设备信息更新成功:";
+            qDebug() << "  设备ID:" << deviceId;
+            qDebug() << "  友好名称:" << device.name;
+            qDebug() << "  设备类型:" << device.info.deviceType;
+            qDebug() << "  制造商:" << device.info.manufacturer;
+            qDebug() << "  型号:" << device.info.modelName;
+            
+            // 发送设备更新信号
+            emit deviceDiscovered(device.id, device.name);
+        } else {
+            qDebug() << "设备描述中未找到有效的friendlyName";
         }
-        
-        qDebug() << "更新设备信息:" << deviceId << info.friendlyName;
-        qDebug() << "服务数量:" << info.services.size();
-        for (const auto& service : info.services) {
-            qDebug() << "服务类型:" << service.serviceType;
-            qDebug() << "控制URL:" << service.controlUrl;
-        }
+    } else {
+        qDebug() << "\n无法更新设备信息:";
+        qDebug() << "  设备ID是否为空:" << deviceId.isEmpty();
+        qDebug() << "  设备是否存在:" << m_devices.contains(deviceId);
     }
 }
 
@@ -516,12 +556,16 @@ void DLNAManager::checkDeviceTimeouts()
 void DLNAManager::addDevice(const DLNADevice& device)
 {
     qDebug() << "添加/更新设备:" << device.id;
+    qDebug() << "  名称:" << device.name;
+    qDebug() << "  位置:" << device.location;
+    qDebug() << "  类型:" << device.type;
+    
     if (!m_devices.contains(device.id)) {
         m_devices[device.id] = device;
-        emit deviceDiscovered(device.id, device.name);
-        qDebug() << "新设备已发现:" << device.name;
+        qDebug() << "新设备已添加到设备列表";
     } else {
         m_devices[device.id] = device;
+        qDebug() << "设备信息已更新";
     }
 }
 

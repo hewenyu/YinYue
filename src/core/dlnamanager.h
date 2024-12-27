@@ -168,7 +168,7 @@ private:
     bool sendUPnPAction(const QString& serviceType, const QString& action, const QMap<QString, QString>& arguments);
     void startPlaybackMonitoring();
     void stopPlaybackMonitoring();
-    void parseDeviceDescription(const QByteArray& data);
+    void parseDeviceDescription(const QByteArray& data, const QString& location);
     void fetchDeviceDescription(const QString& location);
     void addDevice(const DLNADevice& device);
     void removeDevice(const QString& deviceId);
