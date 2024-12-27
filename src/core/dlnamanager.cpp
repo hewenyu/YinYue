@@ -248,7 +248,7 @@ void DLNAManager::sendSSDPByebye()
     NOTIFY * HTTP/1.1       // 消息头
     HOST:                   // 设置为协议保留多播地址和端口，必须是：239.255.255.250:1900（IPv4）或FF0x::C(IPv6
     NTS:                    // 表示通知消息的子类型，必须为ssdp:byebye
-    USN:                    // 表示不同服务的统一服务名，它提��了一种标识出相同类型服务的能力。如：
+    USN:                    // 表示不同服务的统一服务名，它提供了一种标识出相同类型服务的能力。如：
                             // 根/启动设备 uuid:f7001351-cf4f-4edd-b3df-4b04792d0e8a::upnp:rootdevice
                             // 连接管理器  uuid:f7001351-cf4f-4edd-b3df-4b04792d0e8a::urn:schemas-upnp-org:service:ConnectionManager:1
                             // 内容管理器 uuid:f7001351-cf4f-4edd-b3df-4b04792d0e8a::urn:schemas-upnp-org:service:ContentDirectory:1
@@ -280,7 +280,7 @@ QDEBUG : DLNATest::testDeviceDiscovery() 发现设备USN: " uuid:507b4406-58e3-4
 QDEBUG : DLNATest::testDeviceDiscovery() 处理设备: " uuid:507b4406-58e3-4463-95bf-6211f55f12a4"
 QDEBUG : DLNATest::testDeviceDiscovery() 设备地址: "192.168.199.106" : 1900
 QDEBUG : DLNATest::testDeviceDiscovery() 添加/更新设备: " uuid:507b4406-58e3-4463-95bf-6211f55f12a4"
-QDEBUG : DLNATest::testDeviceDiscovery() 新设备已��现: "Unknown Device"
+QDEBUG : DLNATest::testDeviceDiscovery() 新设备已发现: "Unknown Device"
 QDEBUG : DLNATest::testDeviceDiscovery() 信号等待结果: 成功
 QDEBUG : DLNATest::testDeviceDiscovery() 发现的设备数量: 2
 QDEBUG : DLNATest::testDeviceDiscovery() 设备: DLNADevice(id: " uuid:507b4406-58e3-4463-95bf-6211f55f12a4", name: "Unknown Device", location: " http://192.168.199.106:9999/507b4406-58e3-4463-95bf-6211f55f12a4.xml")
@@ -391,99 +391,98 @@ void DLNAManager::updateDeviceInfo(const DLNADevice& device)
 void DLNAManager::parseDeviceDescription(const QByteArray& data)
 {
     QXmlStreamReader xml(data);
-    // new device
-    DLNADevice device;
     DLNADeviceInfo info;
-    QList<DLNAService>  serviceList;
-    // 更新现有设备的信息，但保留名称等已知信息
-    // existingDevice    
+    QString deviceId;
     
-    /*
-    serviceId : 必有字段。服务表示符，是服务实例的唯一标识。
-    serviceType : 必有字段UPnP服务类型。格式定义与deviceType类此。详看文章开头表格。
-    SCPDURL : 必有字段。Service Control Protocol Description URL，获取���备描述文档URL。
-    controlURL : 必有字段。向服务发出控制消息的URL，详见 基于DLNA实现：SOAP控制设备
-    eventSubURL : 必有字段。订阅该服务时间的URL，详见 基于DLNA实现：SOAP控制设备
-     */
-
-    // 输出xml
-    // qDebug() << "解析设备描述:" << QString::fromUtf8(data);
-     /*
-    测试的xml
-    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<root\n    xmlns=\"urn:schemas-upnp-org:device-1-0\">\n    <specVersion>\n        <major>1</major>\n        <minor>1</minor>\n    </specVersion>\n    <device>\n        <deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>\n        <friendlyName>小爱音箱-5204</friendlyName>\n        <manufacturer>Mi, Inc.</manufacturer>\n        <modelDescription>The Mi AI SoundBox</modelDescription>\n        <modelName>S12</modelName>\n        <modelNumber>S12</modelNumber>\n        <qq:X_QPlay_SoftwareCapability\n            xmlns:qq=\"http://www.tencent.com\">QPlay:2\n        </qq:X_QPlay_SoftwareCapability>\n        <dlna:X_DLNADOC\n            xmlns:dlna=\"urn:schemas-dlna-org:device-1-0\">DMR-1.50\n        </dlna:X_DLNADOC>\n        <dlna:X_DLNACAP\n            xmlns:dlna=\"urn:schemas-dlna-org:device-1-0\">,\n        </dlna:X_DLNACAP>\n        <UDN>uuid:507b4406-58e3-4463-95bf-6211f55f12a4</UDN>\n        <serviceList>\n            <service>\n                <serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>\n                <serviceId>urn:upnp-org:serviceId:AVTransport</serviceId>\n                <SCPDURL>AVTransport1.xml</SCPDURL>\n                <controlURL>/AVTransport/control</controlURL>\n                <eventSubURL>/AVTransport/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:schemas-upnp-org:service:ConnectionManager:1</serviceType>\n                <serviceId>urn:upnp-org:serviceId:ConnectionManager</serviceId>\n                <SCPDURL>ConnectionManager1.xml</SCPDURL>\n                <controlURL>/ConnectionManager/control</controlURL>\n                <eventSubURL>/ConnectionManager/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:schemas-upnp-org:service:RenderingControl:1</serviceType>\n                <serviceId>urn:upnp-org:serviceId:RenderingControl</serviceId>\n                <SCPDURL>RenderingControl1.xml</SCPDURL>\n                <controlURL>/RenderingControl/control</controlURL>\n                <eventSubURL>/RenderingControl/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:xiaomi-com:service:Queue:1</serviceType>\n                <serviceId>urn:xiaomi-com:serviceId:Queue</serviceId>\n                <SCPDURL>Queue1.xml</SCPDURL>\n                <controlURL>Queue1/control</controlURL>\n                <eventSubURL>Queue1/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:xiaomi-com:service:Playlist:1</serviceType>\n                <serviceId>urn:xiaomi-com:serviceId:Playlist</serviceId>\n                <SCPDURL>Playlist1.xml</SCPDURL>\n                <controlURL>Playlist1/control</controlURL>\n                <eventSubURL>Playlist1/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:schemas-tencent-com:service:QPlay:1</serviceType>\n                <serviceId>urn:tencent-com:serviceId:QPlay</serviceId>\n                <SCPDURL>QPlay1.xml</SCPDURL>\n                <controlURL>QPlay1/control</controlURL>\n                <eventSubURL>QPlay1/event</eventSubURL>\n            </service>\n            <service>\n                <serviceType>urn:xiaomi-com:service:Favorites:1</serviceType>\n                <serviceId>urn:xiaomi-com:serviceId:Favorites</serviceId>\n                <SCPDURL>Favorites1.xml</SCPDURL>\n                <controlURL>Favorites1/control</controlURL>\n                <eventSubURL>Favorites1/event</eventSubURL>\n            </service>\n        </serviceList>\n    </device>\n</root>\n"
-     */
     while (!xml.atEnd() && !xml.hasError()) {
         QXmlStreamReader::TokenType token = xml.readNext();
-
-        // 解析xml, 所有都要去除前后空格
-        // 没有device就直接跳过这个循环 
-        if (token == QXmlStreamReader::StartElement && xml.name() == "device") {
-            device.id = xml.attributes().value("UDN").toString().simplified();
-        }else{
-            break;
-        }
         
-        if (token == QXmlStreamReader::StartElement && xml.name() == "friendlyName") {
-            device.name = xml.readElementText().simplified();
-        }
-        if (token == QXmlStreamReader::StartElement && xml.name() == "deviceType") {
-            device.type = xml.readElementText().simplified();
-        }
-        if (token == QXmlStreamReader::StartElement && xml.name() == "manufacturer") {
-            info.manufacturer = xml.readElementText().simplified();
-        }
-        if (token == QXmlStreamReader::StartElement && xml.name() == "modelDescription") {
-            info.modelDescription = xml.readElementText().simplified();
-        }
-        if (token == QXmlStreamReader::StartElement && xml.name() == "modelName") {
-            info.modelName = xml.readElementText().simplified();
-        }
-        if (token == QXmlStreamReader::StartElement && xml.name() == "modelNumber") {
-            info.modelNumber = xml.readElementText().simplified();
-        }
-        if (token == QXmlStreamReader::StartElement && xml.name() == "modelUrl") {
-            info.modelUrl = xml.readElementText().simplified();
-        }
-        if (token == QXmlStreamReader::StartElement && xml.name() == "presentationUrl") {
-            info.presentationUrl = xml.readElementText().simplified();
-        }
-        if (token == QXmlStreamReader::StartElement && xml.name() == "udn") {
-            info.udn = xml.readElementText().simplified();
-        }
-        if (token == QXmlStreamReader::StartElement && xml.name() == "upc") {
-            info.upc = xml.readElementText().simplified();
-        }
-
-        if (token == QXmlStreamReader::StartElement && xml.name() == "serviceList") {
-            // 遍历services ,serviceList append 到serviceList
-            // serviceId : 必有字段。服务表示符，是服务实例的唯一标识。
-            // serviceType : 必有字段UPnP服务类型。格式定义与deviceType类此。详看文章开头表格。
-            // SCPDURL : 必有字段。Service Control Protocol Description URL，获取设备描述文档URL。
-            // controlURL : 必有字段。向服务发出控制消息的URL，详见 基于DLNA实现：SOAP控制设备
-            // eventSubURL : 必有字段。订阅该服务时间的URL，详见 基于DLNA实现：SOAP控制设备           
-            while (xml.readNextStartElement()) {
-                if (xml.name() == "service") {
-                    DLNAService service;
-                    service.serviceType = xml.attributes().value("serviceType").toString().simplified();
-                    service.serviceId = xml.attributes().value("serviceId").toString().simplified();
-                    service.scpdUrl = xml.attributes().value("SCPDURL").toString().simplified();
-                    service.controlUrl = xml.attributes().value("controlURL").toString().simplified();
-                    service.eventSubUrl = xml.attributes().value("eventSubURL").toString().simplified();
-                    serviceList.append(service);
-                } else {
-                    xml.skipCurrentElement();
+        if (token == QXmlStreamReader::StartElement) {
+            if (xml.name() == "device") {
+                // 解析设备基本信息
+                while (!xml.atEnd() && xml.readNextStartElement()) {
+                    if (xml.name() == "deviceType") {
+                        info.deviceType = xml.readElementText().trimmed();
+                    } else if (xml.name() == "friendlyName") {
+                        info.friendlyName = xml.readElementText().trimmed();
+                    } else if (xml.name() == "manufacturer") {
+                        info.manufacturer = xml.readElementText().trimmed();
+                    } else if (xml.name() == "manufacturerURL") {
+                        info.manufacturerUrl = xml.readElementText().trimmed();
+                    } else if (xml.name() == "modelDescription") {
+                        info.modelDescription = xml.readElementText().trimmed();
+                    } else if (xml.name() == "modelName") {
+                        info.modelName = xml.readElementText().trimmed();
+                    } else if (xml.name() == "modelNumber") {
+                        info.modelNumber = xml.readElementText().trimmed();
+                    } else if (xml.name() == "modelURL") {
+                        info.modelUrl = xml.readElementText().trimmed();
+                    } else if (xml.name() == "presentationURL") {
+                        info.presentationUrl = xml.readElementText().trimmed();
+                    } else if (xml.name() == "UDN") {
+                        info.udn = xml.readElementText().trimmed();
+                        deviceId = info.udn;  // 保存设备ID
+                    } else if (xml.name() == "UPC") {
+                        info.upc = xml.readElementText().trimmed();
+                    } else if (xml.name() == "serviceList") {
+                        // 解析服务列表
+                        while (xml.readNextStartElement()) {
+                            if (xml.name() == "service") {
+                                DLNAService service;
+                                while (xml.readNextStartElement()) {
+                                    if (xml.name() == "serviceType") {
+                                        service.serviceType = xml.readElementText().trimmed();
+                                    } else if (xml.name() == "serviceId") {
+                                        service.serviceId = xml.readElementText().trimmed();
+                                    } else if (xml.name() == "SCPDURL") {
+                                        service.scpdUrl = xml.readElementText().trimmed();
+                                    } else if (xml.name() == "controlURL") {
+                                        service.controlUrl = xml.readElementText().trimmed();
+                                    } else if (xml.name() == "eventSubURL") {
+                                        service.eventSubUrl = xml.readElementText().trimmed();
+                                    } else {
+                                        xml.skipCurrentElement();
+                                    }
+                                }
+                                // 添加服务到列表
+                                if (!service.serviceType.isEmpty()) {
+                                    info.services.append(service);
+                                }
+                            } else {
+                                xml.skipCurrentElement();
+                            }
+                        }
+                    } else {
+                        xml.skipCurrentElement();
+                    }
                 }
             }
-            info.services = serviceList;
         }
-        
     }
-    qDebug() << "更新设备信息:" << device.id << device.info.friendlyName;
-    // updateDeviceInfo
-    updateDeviceInfo(device);
 
     if (xml.hasError()) {
         qDebug() << "XML解析错误:" << xml.errorString();
+        return;
+    }
+
+    // 更新设备信息
+    if (!deviceId.isEmpty() && m_devices.contains(deviceId)) {
+        DLNADevice& device = m_devices[deviceId];
+        device.info = info;
+        device.name = info.friendlyName;
+        
+        // 更新服务映射
+        device.services.clear();
+        for (const auto& service : info.services) {
+            device.services[service.serviceType] = service;
+        }
+        
+        qDebug() << "更新设备信息:" << deviceId << info.friendlyName;
+        qDebug() << "服务数量:" << info.services.size();
+        for (const auto& service : info.services) {
+            qDebug() << "服务类型:" << service.serviceType;
+            qDebug() << "控制URL:" << service.controlUrl;
+        }
     }
 }
 
@@ -704,23 +703,24 @@ bool DLNAManager::sendUPnPAction(const QString& serviceType, const QString& acti
     }
 
     const DLNADevice& device = m_devices[m_currentDeviceId];
-    if (device.location.isEmpty()) {
-        qDebug() << "设备位置URL为空";
+    if (!device.services.contains(serviceType)) {
+        qDebug() << "服务不存在:" << serviceType;
         return false;
     }
-    
-    // 构建控制URL
-    QUrl controlUrl(device.location);
-    QString controlPath = controlUrl.path();
-    
-    // 确保控制路径包含 "control"
-    if (!controlPath.contains("control", Qt::CaseInsensitive)) {
-        if (!controlPath.endsWith('/')) {
-            controlPath += '/';
-        }
-        controlPath += "control";
-        controlUrl.setPath(controlPath);
+
+    const DLNAService& service = device.services[serviceType];
+    if (service.controlUrl.isEmpty()) {
+        qDebug() << "控制URL为空";
+        return false;
     }
+
+    // 构建完整的控制URL
+    QUrl baseUrl(device.location);
+    QString basePath = baseUrl.path();
+    basePath = basePath.left(basePath.lastIndexOf('/') + 1);
+    
+    QUrl controlUrl = baseUrl;
+    controlUrl.setPath(basePath + service.controlUrl.mid(service.controlUrl.startsWith('/') ? 1 : 0));
     
     qDebug() << "发送UPnP动作到:" << controlUrl.toString();
     
@@ -744,9 +744,9 @@ bool DLNAManager::sendUPnPAction(const QString& serviceType, const QString& acti
     QNetworkRequest request(controlUrl);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "text/xml; charset=\"utf-8\"");
     request.setRawHeader("SOAPAction", QString("\"%1#%2\"").arg(serviceType, actionName).toUtf8());
-    request.setRawHeader("Connection", "keep-alive");  // 修改为 keep-alive
+    request.setRawHeader("Connection", "keep-alive");
     request.setRawHeader("Content-Length", QString::number(soapBody.toUtf8().length()).toUtf8());
-    request.setRawHeader("User-Agent", "YinYue/1.0");  // 添加 User-Agent
+    request.setRawHeader("User-Agent", "YinYue/1.0");
 
     qDebug() << "发送SOAP消息:" << soapBody;
     QNetworkReply* reply = m_networkManager->post(request, soapBody.toUtf8());
@@ -787,7 +787,6 @@ bool DLNAManager::sendUPnPAction(const QString& serviceType, const QString& acti
                     }
                 }
             }
-            success = true;
         }
         reply->deleteLater();
         return success;

@@ -82,11 +82,15 @@ public:
         quint16 port; // 设备端口
         QDateTime lastSeen; // 最后发现时间
         DLNADeviceInfo info;     // 设备详细信息
+        QMap<QString, DLNAService> services;  // 服务类型到服务的映射
 
         DLNADevice() : port(0) {}
         DLNADevice(const QString& _id, const QString& _name, const QString& _location)
         : id(_id), name(_name), location(_location), port(0), 
           lastSeen(QDateTime::currentDateTime()) {}
+
+        // 重载输出运算符
+        friend QDebug operator<<(QDebug debug, const DLNADevice& device);
     };
 
     explicit DLNAManager(QObject *parent = nullptr);
@@ -145,7 +149,7 @@ private:
 
     static const QHostAddress SSDP_MULTICAST_ADDR;
     static const quint16 SSDP_PORT = 1900;
-    static const int DISCOVERY_INTERVAL = 5000;  // 5秒
+    static const int DISCOVERY_INTERVAL = 10000;  // 10秒
     static const int DEVICE_TIMEOUT = 30000;     // 30秒
 
     QUdpSocket* m_ssdpSocket;

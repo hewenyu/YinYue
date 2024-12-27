@@ -1,247 +1,217 @@
-#include <QtTest>
+#include <QTest>
 #include <QSignalSpy>
 #include <QDebug>
-#include "core/dlnamanager.h"
-#include "core/musicplayer.h"
-#include "models/musicfile.h"
-#include <unistd.h>
+#include <QFile>
+#include "../src/core/dlnamanager.h"
+
 class DLNATest : public QObject
 {
     Q_OBJECT
 
 private slots:
-    void initTestCase();
-    void cleanupTestCase();
-    void init();
-    void cleanup();
+    void initTestCase() {
+        qDebug() << "Starting DLNA tests";
+        // 验证测试音频文件是否存在
+        QVERIFY2(QFile::exists(m_testMp3Path1), "测试文件1不存在");
+        QVERIFY2(QFile::exists(m_testMp3Path2), "测试文件2不存在");
+    }
 
-    // DLNA Manager 测试
-    void testDeviceDiscovery();
-    void testDeviceConnection();
-    void testDeviceLost();
-    void testMultipleDevices();
-    void testInvalidDevice();
+    void cleanupTestCase() {
+        qDebug() << "Finishing DLNA tests";
+    }
 
-    // DLNA 播放控制测试
-    void testPlayMedia();
-    void testPauseMedia();
-    void testStopMedia();
-    void testVolumeControl();
-    void testSeekPosition();
+    void init() {
+        manager = new DLNAManager(this);
+    }
 
-    // DLNA 状态变化测试
-    void testConnectionStateChanges();
-    void testPlaybackStateChanges();
-    void testErrorHandling();
+    void cleanup() {
+        if (manager->isConnected()) {
+            manager->disconnectFromDevice();
+        }
+        delete manager;
+    }
 
-    // DLNA 与本地播放切换测试
-    void testSwitchToLocalPlayback();
-    void testSwitchToDLNAPlayback();
-    void testAutoReconnect();
+    // 测试设备发现功能
+    void testDeviceDiscovery() {
+        QSignalSpy discoveredSpy(manager, SIGNAL(deviceDiscovered(QString,QString)));
+        QSignalSpy lostSpy(manager, SIGNAL(deviceLost(QString)));
+
+        // 启动设备发现
+        manager->startDiscovery();
+
+        // 等待发现设备（最多等待10秒）
+        bool found = false;
+        for (int i = 0; i < 10 && !found; ++i) {
+            discoveredSpy.wait(1000);
+            QList<DLNAManager::DLNADevice> devices = manager->getAvailableDevices();
+            qDebug() << "发现的设备数量:" << devices.size();
+            
+            for (const auto& device : devices) {
+                qDebug() << "设备:" << device;
+                if (device.id.trimmed() == m_targetDeviceId) {
+                    found = true;
+                    qDebug() << "找到目标设备:" << device.name;
+                    break;
+                }
+            }
+        }
+
+        // 停止发现
+        manager->stopDiscovery();
+
+        // 验证是否找到目标设备
+        if (!found) {
+            qDebug() << "目标设备ID:" << m_targetDeviceId;
+            qDebug() << "未找到目标设备，可能需要确认设备是否在线或网络连接是否正常";
+        }
+        QVERIFY2(found, "未找到目标设备");
+    }
+
+    // 测试设备连接功能
+    void testDeviceConnection() {
+        QSignalSpy connectionSpy(manager, SIGNAL(connectionStateChanged(bool)));
+        
+        // 先发现设备
+        manager->startDiscovery();
+        
+        // 等待发现目标设备（最多等待10秒）
+        bool found = false;
+        for (int i = 0; i < 10 && !found; ++i) {
+            QTest::qWait(1000);
+            QList<DLNAManager::DLNADevice> devices = manager->getAvailableDevices();
+            for (const auto& device : devices) {
+                if (device.id.trimmed() == m_targetDeviceId) {
+                    found = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!found) {
+            QSKIP("未找到目标设备，跳过连接测试");
+        }
+        
+        // 尝试连接目标设备
+        bool connected = manager->connectToDevice(m_targetDeviceId);
+        if (!connected) {
+            qDebug() << "连接失败，当前设备信息:";
+            const auto& devices = manager->getAvailableDevices();
+            for (const auto& device : devices) {
+                if (device.id.trimmed() == m_targetDeviceId) {
+                    qDebug() << "设备名称:" << device.name;
+                    qDebug() << "设备位置:" << device.location;
+                    qDebug() << "设备类型:" << device.type;
+                    qDebug() << "设备地址:" << device.address.toString() << ":" << device.port;
+                    break;
+                }
+            }
+        }
+        QVERIFY2(connected, "连接设备失败");
+            
+        // 等待连接状态变化
+        if (connected) {
+            bool stateChanged = connectionSpy.wait(2000);
+            QVERIFY2(stateChanged, "未收到连接状态变化信号");
+        }
+            
+        // 验证连接状态
+        QVERIFY2(manager->isConnected(), "设备应该处于连接状态");
+        QCOMPARE(manager->getCurrentDeviceId(), m_targetDeviceId);
+            
+        // 断开连接
+        manager->disconnectFromDevice();
+        QVERIFY2(!manager->isConnected(), "设备应该处于断开状态");
+        
+        manager->stopDiscovery();
+    }
+
+    // 测试媒体控制功能
+    void testMediaControl() {
+        // 先连接设备
+        manager->startDiscovery();
+        
+        // 等待发现目标设备（最多等待10秒）
+        bool found = false;
+        for (int i = 0; i < 10 && !found; ++i) {
+            QTest::qWait(1000);
+            QList<DLNAManager::DLNADevice> devices = manager->getAvailableDevices();
+            for (const auto& device : devices) {
+                if (device.id.trimmed() == m_targetDeviceId) {
+                    found = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!found) {
+            QSKIP("未找到目标设备，跳过媒体控制测试");
+        }
+        
+        if (manager->connectToDevice(m_targetDeviceId)) {
+            QSignalSpy playbackSpy(manager, SIGNAL(playbackStateChanged(QString)));
+            
+            // 测试播放第一个文件
+            QUrl testUrl1 = QUrl::fromLocalFile(m_testMp3Path1);
+            qDebug() << "测试播放文件1:" << testUrl1.toString();
+            bool playSuccess = manager->playMedia(testUrl1);
+            if (!playSuccess) {
+                qDebug() << "播放失败，检查文件路径:" << m_testMp3Path1;
+                qDebug() << "文件是否存在:" << QFile::exists(m_testMp3Path1);
+            }
+            QVERIFY2(playSuccess, "播放文件1失败");
+            
+            if (playSuccess) {
+                bool stateChanged = playbackSpy.wait(2000);
+                QVERIFY2(stateChanged, "未收到播放状态变化信号");
+            }
+            
+            // 测试暂停
+            QTest::qWait(5000); // 播放5秒后暂停
+            bool pauseSuccess = manager->pauseMedia();
+            QVERIFY2(pauseSuccess, "暂停失败");
+            
+            if (pauseSuccess) {
+                bool stateChanged = playbackSpy.wait(1000);
+                QVERIFY2(stateChanged, "未收到暂停状态变化信号");
+            }
+            
+            // 测试继续播放
+            QTest::qWait(2000); // 暂停2秒后继续
+            playSuccess = manager->playMedia(testUrl1);
+            QVERIFY2(playSuccess, "继续播放失败");
+            
+            // 测试播放第二个文件
+            QTest::qWait(3000);
+            QUrl testUrl2 = QUrl::fromLocalFile(m_testMp3Path2);
+            qDebug() << "测试播放文件2:" << testUrl2.toString();
+            playSuccess = manager->playMedia(testUrl2);
+            QVERIFY2(playSuccess, "播放文件2失败");
+            
+            // 测试音量控制
+            QTest::qWait(3000);
+            QVERIFY2(manager->setVolume(30), "设置音量30%失败");
+            QTest::qWait(2000);
+            QVERIFY2(manager->setVolume(60), "设置音量60%失败");
+            
+            // 测试停止
+            QTest::qWait(3000);
+            bool stopSuccess = manager->stopMedia();
+            QVERIFY2(stopSuccess, "停止播放失败");
+            
+            manager->disconnectFromDevice();
+        } else {
+            QFAIL("连接目标设备失败");
+        }
+        
+        manager->stopDiscovery();
+    }
 
 private:
-    DLNAManager* m_dlnaManager;
-    MusicPlayer* m_player;
-    QList<MusicFile> m_testFiles;
-    QString m_testDeviceId;
-    QString m_realMp3Path1;
-    QString m_realMp3Path2;
-
-    void createTestFiles();
-    void setupTestDevice();
+    DLNAManager* manager;
+    const QString m_targetDeviceId = "uuid:507b4406-58e3-4463-95bf-6211f55f12a4";
+    const QString m_testMp3Path1 = "/home/hewenyu/Music/天地龙鳞-王力宏.mp3";
+    const QString m_testMp3Path2 = "/home/hewenyu/Music/如愿-王菲.mp3";
 };
-
-// 初始化测试环境
-void DLNATest::initTestCase()
-{
-    qDebug() << "=== 初始化测试环境 ===";
-    
-    // 创建测试对象
-    m_dlnaManager = new DLNAManager(this);
-    m_player = new MusicPlayer(this);
-    
-    // create test files
-    createTestFiles();
-    // setup test device
-    setupTestDevice();
-}
-
-void DLNATest::cleanupTestCase()
-{
-    qDebug() << "=== 清理测试环境 ===";
-    delete m_player;
-    delete m_dlnaManager;
-    qDebug() << "测试环境清理完成";
-}
-
-void DLNATest::init()
-{
-    qDebug() << "\n=== 开始新的测试用例 ===";
-    qDebug() << "启动设备发现...";
-    m_dlnaManager->startDiscovery();
-    QSignalSpy discoveredSpy(m_dlnaManager, SIGNAL(deviceDiscovered(QString,QString)));
-    qDebug() << "等待设备发现信号...";
-    bool signalReceived = discoveredSpy.wait(10000);  // 增加等待时间到10秒
-    qDebug() << "信号等待结果:" << (signalReceived ? "成功" : "超时");
-    QVERIFY(signalReceived);
-}
-
-void DLNATest::cleanup()
-{
-    // 每个测试用例结束后的清理
-    m_dlnaManager->stopDiscovery();
-    m_dlnaManager->disconnectFromDevice();
-    qDebug() << "测试用例结束\n";
-}
-
-void DLNATest::createTestFiles()
-{
-    qDebug() << "创建测试文件...";
-    // 添加实际的音频文件
-    m_testFiles.append(MusicFile(m_realMp3Path1));
-    m_testFiles.append(MusicFile(m_realMp3Path2));
-    qDebug() << "测试文件创建完成，文件数量:" << m_testFiles.size();
-}
-
-void DLNATest::setupTestDevice()
-{
-    qDebug() << "设置测试设备...";
-    m_testDeviceId = "uuid:507b4406-58e3-4463-95bf-6211f55f12a4";  // 小爱音响
-    qDebug() << "测试设备ID:" << m_testDeviceId;
-}
-
-
-
-void DLNATest::testDeviceDiscovery()
-{
-   
-    bool found = false;
-    int maxRetries = 10;  // 最大重试次数
-    
-    // 获取设备列表
-    QList<DLNAManager::DLNADevice> devices = m_dlnaManager->getAvailableDevices();
-    // 打印设备数量
-    qDebug() << "设备数量:" << devices.size();
-
-
-    while (devices.size() != 2)
-    {
-        qDebug() << "等待设备发现...";
-        devices = m_dlnaManager->getAvailableDevices();
-        qDebug() << "设备数量:" << devices.size();
-        sleep(1);
-        if (devices.size() == 2)
-        {
-            break;
-        }
-    }
-    
-    // 验证设备列表
-    for (const auto& device : devices) {
-        if (device.id == m_testDeviceId) {
-            found = true;
-            qDebug() << "找到目标设备:" << device.id;
-            break;
-        }
-    }
-    qDebug() << "发现的设备ID:" << (found ? m_testDeviceId : "未找到");
-    qDebug() << "期望的设备ID:" << m_testDeviceId;
-    QVERIFY(found);
-}
-
-// testDeviceConnection
-void DLNATest::testDeviceConnection()
-{
-    // 后面来写
-    QVERIFY(true);
-}
-
-void DLNATest::testDeviceLost()
-{
-    // 后面来写
-    QVERIFY(true);
-}
-
-void DLNATest::testMultipleDevices()
-{
-    // 后面来写
-    QVERIFY(true);
-}
-
-void DLNATest::testInvalidDevice()
-{
-    // 后面来写
-    QVERIFY(true);
-}   
-
-void DLNATest::testPlayMedia()
-{
-    // 后面来写
-    QVERIFY(true);
-}
-
-void DLNATest::testPauseMedia()
-{
-    // 后面来写
-    QVERIFY(true);
-}
-
-void DLNATest::testStopMedia()
-{
-    // 后面来写
-    QVERIFY(true);
-}
-
-void DLNATest::testVolumeControl()
-{
-    // 后面来写
-    QVERIFY(true);
-}
-
-void DLNATest::testSeekPosition()
-{
-    // 后面来写
-    QVERIFY(true);
-}   
-
-void DLNATest::testConnectionStateChanges()
-{
-    // 后面来写
-    QVERIFY(true);
-}
-
-void DLNATest::testPlaybackStateChanges()
-{
-    // 后面来写
-    QVERIFY(true);
-}
-
-void DLNATest::testErrorHandling()
-{
-    // 后面来写
-    QVERIFY(true);
-}
-
-void DLNATest::testSwitchToLocalPlayback()
-{
-    // 后面来写
-    QVERIFY(true);
-}
-
-void DLNATest::testSwitchToDLNAPlayback()
-{
-    // 后面来写
-    QVERIFY(true);
-}
-
-
-void DLNATest::testAutoReconnect()
-{
-    // 后面来写
-    QVERIFY(true);
-}
-
-
 
 QTEST_MAIN(DLNATest)
 #include "dlna_test.moc" 
