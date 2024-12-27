@@ -1,5 +1,6 @@
 #include "musicplayer.h"
 #include <QDebug>
+#include <QTimer>
 
 MusicPlayer::MusicPlayer(QObject *parent)
     : QObject(parent)
@@ -11,6 +12,8 @@ MusicPlayer::MusicPlayer(QObject *parent)
     , m_currentDuration(0)
     , m_currentVolume(100)
     , m_isDeviceConnected(false)
+    , m_isManualStop(false)
+    , m_isProcessingNextTrack(false)
 {
     // 连接本地播放器信号
     connect(m_localPlayer, &LocalPlayer::playbackStateChanged,
@@ -63,10 +66,8 @@ void MusicPlayer::play(const QUrl& url)
     qDebug() << "\n开始播放:" << url.toString();
     
     if (m_isDeviceConnected) {
-        // 如果连接了DLNA设备，通过DLNA播放
         m_dlnaManager->playMedia(url);
     } else {
-        // 否则使用本地播放器
         m_localPlayer->play(url);
     }
 }
@@ -85,6 +86,9 @@ void MusicPlayer::pause()
 void MusicPlayer::stop()
 {
     qDebug() << "停止播放";
+    lockState();
+    m_isManualStop = true;  // 标记为手动停止
+    unlockState();
     
     if (m_isDeviceConnected) {
         m_dlnaManager->stopMedia();
@@ -180,47 +184,95 @@ int MusicPlayer::getVolume() const
 // 本地播放器状态处理
 void MusicPlayer::handleLocalPlaybackStateChanged(const QString& state)
 {
+    qDebug() << "本地播放状态变化:" << state;
     if (!m_isDeviceConnected) {
-        m_currentPlaybackState = state;
-        emit playbackStateChanged(state);
+        lockState();
+        // 避免重复设置相同状态
+        if (m_currentPlaybackState != state) {
+            m_currentPlaybackState = state;
+            emit playbackStateChanged(state);
 
-        // 如果当前歌曲播放完毕，根据播放模式播放下一首
-        if (state == "Stopped" && m_playlist) {
-            switch (m_playlist->playMode()) {
-                case Playlist::Sequential: {
-                    int nextIndex = m_playlist->currentIndex() + 1;
-                    if (nextIndex < m_playlist->count()) {
-                        playTrack(nextIndex);
+            // 只在真正停止播放时（不是暂停）且不是手动停止时，才自动播放下一首
+            if (state == "Stopped" && m_playlist && m_playlist->currentIndex() != -1) {
+                if (!m_isManualStop) {
+                    if (!m_isProcessingNextTrack) {
+                        // 检查当前播放时长，只有当播放时长超过1秒时才认为是正常播放结束
+                        if (m_currentPosition > 1000) {
+                            m_isProcessingNextTrack = true;
+                            unlockState();  // 在开始处理下一首歌之前释放锁
+                            
+                            qDebug() << "当前歌曲播放完毕，检查是否需要播放下一首";
+                            qDebug() << "当前播放位置:" << m_currentPosition;
+                            
+                            // 使用较长的延时确保状态已经完全清理
+                            QTimer::singleShot(1000, this, [this]() {
+                                lockState();  // 重新获取锁来处理下一首歌
+                                if (!m_isManualStop) {  // 再次检查是否是手动停止
+                                    switch (m_playlist->playMode()) {
+                                        case Playlist::Sequential: {
+                                            int nextIndex = m_playlist->nextIndex();
+                                            qDebug() << "顺序播放模式，下一首索引:" << nextIndex;
+                                            if (nextIndex != -1) {
+                                                m_playlist->setCurrentIndex(nextIndex);
+                                                unlockState();
+                                                playCurrentTrack();
+                                                return;
+                                            }
+                                            break;
+                                        }
+                                        case Playlist::Random: {
+                                            int nextIndex = m_playlist->nextIndex();
+                                            qDebug() << "随机播放模式，下一首索引:" << nextIndex;
+                                            if (nextIndex != -1) {
+                                                m_playlist->setCurrentIndex(nextIndex);
+                                                unlockState();
+                                                playCurrentTrack();
+                                                return;
+                                            }
+                                            break;
+                                        }
+                                        case Playlist::RepeatOne: {
+                                            qDebug() << "单曲循环模式，重新播放当前歌曲";
+                                            unlockState();
+                                            playCurrentTrack();
+                                            return;
+                                        }
+                                        case Playlist::RepeatAll: {
+                                            int nextIndex = m_playlist->nextIndex();
+                                            qDebug() << "列表循环模式，下一首索引:" << nextIndex;
+                                            if (nextIndex != -1) {
+                                                m_playlist->setCurrentIndex(nextIndex);
+                                                unlockState();
+                                                playCurrentTrack();
+                                                return;
+                                            }
+                                            break;
+                                        }
+                                    }
+                                }
+                                m_isProcessingNextTrack = false;
+                                unlockState();
+                            });
+                            return;
+                        } else {
+                            qDebug() << "歌曲播放时间过短，不进行自动切换";
+                            m_isProcessingNextTrack = false;
+                        }
                     }
-                    break;
                 }
-                case Playlist::Random: {
-                    int nextIndex = m_playlist->nextIndex();
-                    if (nextIndex != -1) {
-                        playTrack(nextIndex);
-                    }
-                    break;
-                }
-                case Playlist::RepeatOne: {
-                    playCurrentTrack();
-                    break;
-                }
-                case Playlist::RepeatAll: {
-                    int nextIndex = m_playlist->nextIndex();
-                    if (nextIndex != -1) {
-                        playTrack(nextIndex);
-                    }
-                    break;
-                }
+                m_isManualStop = false;
             }
         }
+        unlockState();
     }
 }
 
 void MusicPlayer::handleLocalPositionChanged(qint64 position)
 {
     if (!m_isDeviceConnected) {
+        lockState();
         m_currentPosition = position;
+        unlockState();
         emit positionChanged(position);
     }
 }
@@ -228,7 +280,9 @@ void MusicPlayer::handleLocalPositionChanged(qint64 position)
 void MusicPlayer::handleLocalDurationChanged(qint64 duration)
 {
     if (!m_isDeviceConnected) {
+        lockState();
         m_currentDuration = duration;
+        unlockState();
         emit durationChanged(duration);
     }
 }
@@ -236,7 +290,9 @@ void MusicPlayer::handleLocalDurationChanged(qint64 duration)
 void MusicPlayer::handleLocalVolumeChanged(int volume)
 {
     if (!m_isDeviceConnected) {
+        lockState();
         m_currentVolume = volume;
+        unlockState();
         emit volumeChanged(volume);
     }
 }
@@ -268,7 +324,9 @@ void MusicPlayer::handleDeviceConnectionChanged(bool connected)
 void MusicPlayer::handleDevicePlaybackStateChanged(const QString& state)
 {
     if (m_isDeviceConnected) {
+        lockState();
         m_currentPlaybackState = state;
+        unlockState();
         emit playbackStateChanged(state);
     }
 }
@@ -296,29 +354,39 @@ void MusicPlayer::play()
 
 void MusicPlayer::next()
 {
+    qDebug() << "切换到下一首歌曲";
     if (!m_playlist || m_playlist->count() == 0) {
+        qDebug() << "播放列表为空，无法切换下一首";
         return;
     }
 
     int nextIndex = m_playlist->nextIndex();
+    qDebug() << "当前索引:" << m_playlist->currentIndex() << "下一首索引:" << nextIndex;
+    
     if (nextIndex != -1) {
-        m_playlist->setCurrentIndex(nextIndex);
-        playCurrentTrack();
-        emit currentSongChanged(nextIndex);
+        playTrack(nextIndex);
+    } else {
+        qDebug() << "已经是最后一首歌曲";
+        stop();
     }
 }
 
 void MusicPlayer::previous()
 {
+    qDebug() << "切换到上一首歌曲";
     if (!m_playlist || m_playlist->count() == 0) {
+        qDebug() << "播放列表为空，无法切换上一首";
         return;
     }
 
     int prevIndex = m_playlist->previousIndex();
+    qDebug() << "当前索引:" << m_playlist->currentIndex() << "上一首索引:" << prevIndex;
+    
     if (prevIndex != -1) {
-        m_playlist->setCurrentIndex(prevIndex);
-        playCurrentTrack();
-        emit currentSongChanged(prevIndex);
+        playTrack(prevIndex);
+    } else {
+        qDebug() << "已经是第一首歌曲";
+        stop();
     }
 }
 
@@ -364,16 +432,27 @@ void MusicPlayer::playCurrentTrack()
     }
 
     MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
-    play(currentFile.fileUrl());
+    qDebug() << "播放当前歌曲:" << currentFile.filePath();
+    
+    // 使用QTimer延迟播放，避免状态冲突
+    QTimer::singleShot(500, this, [this, currentFile]() {
+        lockState();
+        m_currentPosition = 0;  // 重置播放位置
+        m_isProcessingNextTrack = false;  // 重置处理标志
+        unlockState();
+        play(currentFile.fileUrl());
+        emit currentSongChanged(m_playlist->currentIndex());
+    });
 }
 
 void MusicPlayer::playTrack(int index)
 {
+    qDebug() << "播放索引" << index << "的歌曲";
     if (!m_playlist || index < 0 || index >= m_playlist->count()) {
+        qDebug() << "无效的播放索引";
         return;
     }
 
     m_playlist->setCurrentIndex(index);
     playCurrentTrack();
-    emit currentSongChanged(index);
 } 

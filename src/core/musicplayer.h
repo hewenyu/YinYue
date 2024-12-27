@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QUrl>
+#include <QMutex>
 #include "localplayer.h"
 #include "dlnamanager.h"
 #include "models/playlist.h"
@@ -84,6 +85,11 @@ private slots:
 private:
     void playCurrentTrack();
     void playTrack(int index);
+    
+    // 状态锁定方法
+    void lockState() { m_stateMutex.lock(); }
+    void unlockState() { m_stateMutex.unlock(); }
+    bool tryLockState() { return m_stateMutex.tryLock(); }
 
     LocalPlayer* m_localPlayer;
     DLNAManager* m_dlnaManager;
@@ -93,6 +99,9 @@ private:
     qint64 m_currentDuration;
     int m_currentVolume;
     bool m_isDeviceConnected;
+    bool m_isManualStop;
+    bool m_isProcessingNextTrack;
+    QMutex m_stateMutex;  // 状态互斥锁
 };
 
 #endif // MUSICPLAYER_H 

@@ -19,12 +19,23 @@ public:
     };
     Q_ENUM(PlayMode)
 
+    // 自定义数据角色
+    enum Roles {
+        TitleRole = Qt::UserRole + 1,
+        ArtistRole,
+        AlbumRole,
+        GenreRole,
+        DurationRole,
+        FilePathRole
+    };
+
     explicit Playlist(QObject *parent = nullptr);
     ~Playlist();
 
     // QAbstractListModel接口
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+    QHash<int, QByteArray> roleNames() const override;
 
     // 播放列表操作
     void addFile(const MusicFile &file);

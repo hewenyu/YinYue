@@ -9,6 +9,7 @@
 #include <QDebug>
 #include <QSettings>
 #include <QTimer>
+#include <QStyledItemDelegate>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -29,6 +30,23 @@ MainWindow::MainWindow(QWidget *parent)
     
     // 设置播放列表视图
     ui->playlistView->setModel(m_playlist);
+    ui->playlistView->setAlternatingRowColors(true);
+    ui->playlistView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    ui->playlistView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    
+    // 设置播放列表委托
+    class PlaylistItemDelegate : public QStyledItemDelegate {
+    public:
+        QString displayText(const QVariant &value, const QLocale &locale) const override {
+            Q_UNUSED(locale);
+            QString title = value.toString();
+            if (title.isEmpty()) {
+                return tr("Unknown");
+            }
+            return title;
+        }
+    };
+    ui->playlistView->setItemDelegate(new PlaylistItemDelegate);
     
     // 设置播放模式按钮图标
     updatePlayModeButton(m_player->playMode());
@@ -40,6 +58,9 @@ MainWindow::MainWindow(QWidget *parent)
     updatePlaybackState(m_player->getPlaybackState());
     updatePosition(m_player->getPosition());
     updateDLNAStatus(m_player->isDeviceConnected());
+    
+    // 加载设置
+    loadSettings();
 }
 
 MainWindow::~MainWindow()
@@ -131,12 +152,30 @@ void MainWindow::updateCurrentSong(int index)
     if (index >= 0 && m_playlist) {
         MusicFile currentFile = m_playlist->at(index);
         QString displayName = currentFile.title();
+        QString artist = currentFile.artist();
+        QString album = currentFile.album();
+        
         if (displayName.isEmpty()) {
             QFileInfo fileInfo(currentFile.filePath());
             displayName = fileInfo.fileName();
         }
-        ui->currentSongLabel->setText(displayName);
+        
+        // 更新当前歌曲标签
+        QString displayText = displayName;
+        if (!artist.isEmpty()) {
+            displayText = tr("%1 - %2").arg(artist).arg(displayName);
+        }
+        if (!album.isEmpty()) {
+            displayText += tr(" [%1]").arg(album);
+        }
+        
+        ui->currentSongLabel->setText(displayText);
         setWindowTitle(tr("%1 - YinYue").arg(displayName));
+        
+        // 更新播放列表选择
+        QModelIndex modelIndex = m_playlist->index(index);
+        ui->playlistView->setCurrentIndex(modelIndex);
+        ui->playlistView->scrollTo(modelIndex);
     } else {
         ui->currentSongLabel->setText(tr("No song playing"));
         setWindowTitle(tr("YinYue"));
