@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QFile>
 #include "../src/core/dlnamanager.h"
+#include "../src/models/dlnadevice.h"
 
 class DLNATest : public QObject
 {
@@ -43,14 +44,14 @@ private slots:
         bool found = false;
         for (int i = 0; i < 10 && !found; ++i) {
             discoveredSpy.wait(1000);
-            QList<DLNAManager::DLNADevice> devices = manager->getAvailableDevices();
+            QList<DLNADevice> devices = manager->getAvailableDevices();
             qDebug() << "发现的设备数量:" << devices.size();
             
             for (const auto& device : devices) {
-                qDebug() << "设备:" << device;
-                if (device.id.trimmed() == m_targetDeviceId) {
+                qDebug() << "设备:" << device.friendlyName;
+                if (device.UDN.trimmed() == m_targetDeviceId) {
                     found = true;
-                    qDebug() << "找到目标设备:" << device.name;
+                    qDebug() << "找到目标设备:" << device.friendlyName;
                     break;
                 }
             }
@@ -78,9 +79,9 @@ private slots:
         bool found = false;
         for (int i = 0; i < 10 && !found; ++i) {
             QTest::qWait(1000);
-            QList<DLNAManager::DLNADevice> devices = manager->getAvailableDevices();
+            QList<DLNADevice> devices = manager->getAvailableDevices();
             for (const auto& device : devices) {
-                if (device.id.trimmed() == m_targetDeviceId) {
+                if (device.UDN.trimmed() == m_targetDeviceId) {
                     found = true;
                     break;
                 }
@@ -97,10 +98,10 @@ private slots:
             qDebug() << "连接失败，当前设备信息:";
             const auto& devices = manager->getAvailableDevices();
             for (const auto& device : devices) {
-                if (device.id.trimmed() == m_targetDeviceId) {
-                    qDebug() << "设备名称:" << device.name;
-                    qDebug() << "设备位置:" << device.location;
-                    qDebug() << "设备类型:" << device.type;
+                if (device.UDN.trimmed() == m_targetDeviceId) {
+                    qDebug() << "设备名称:" << device.friendlyName;
+                    qDebug() << "设备位置:" << device.URLBase;
+                    qDebug() << "设备类型:" << device.deviceType;
                     qDebug() << "设备地址:" << device.address.toString() << ":" << device.port;
                     break;
                 }
@@ -134,9 +135,9 @@ private slots:
         bool found = false;
         for (int i = 0; i < 10 && !found; ++i) {
             QTest::qWait(1000);
-            QList<DLNAManager::DLNADevice> devices = manager->getAvailableDevices();
+            QList<DLNADevice> devices = manager->getAvailableDevices();
             for (const auto& device : devices) {
-                if (device.id.trimmed() == m_targetDeviceId) {
+                if (device.UDN.trimmed() == m_targetDeviceId) {
                     found = true;
                     break;
                 }

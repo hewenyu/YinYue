@@ -7,6 +7,7 @@
 #include <QMediaContent>
 #include <QEventLoop>
 #include "models/playlist.h"
+#include "models/dlnadevice.h"
 #include "core/dlnamanager.h"
 
 class MusicPlayer : public QObject
@@ -19,7 +20,7 @@ public:
     // DLNA 相关功能
     void startDLNADiscovery();
     void stopDLNADiscovery();
-    QList<DLNAManager::DLNADevice> getAvailableDLNADevices() const;
+    QList<DLNADevice> getAvailableDLNADevices() const;
     bool connectToDLNADevice(const QString& deviceId);
     void disconnectFromDLNADevice();
     bool isDLNAConnected() const;
@@ -85,7 +86,7 @@ private:
     DLNAManager* m_dlnaManager;
     bool m_useDLNA;
     QString m_currentDLNADevice;
-    QList<DLNAManager::DLNADevice> m_availableDLNADevices;
+    QList<DLNADevice> m_availableDLNADevices;
     bool m_dlnaConnected;
 };
 

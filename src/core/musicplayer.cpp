@@ -12,6 +12,7 @@ MusicPlayer::MusicPlayer(QObject *parent)
     , m_eventLoop(nullptr)
     , m_dlnaManager(new DLNAManager(this))
     , m_useDLNA(false)
+    , m_dlnaConnected(false)
 {
     // 连接信号
     connect(m_player, &QMediaPlayer::stateChanged, this, &MusicPlayer::stateChanged);
@@ -27,7 +28,7 @@ MusicPlayer::MusicPlayer(QObject *parent)
                 emit errorOccurred(m_player->errorString());
             });
 
-    // 设置默认音量���100
+    // 设置默认音量为100
     m_player->setVolume(100);
 
     // 连接DLNA信号
@@ -413,7 +414,7 @@ void MusicPlayer::togglePlayMode()
 
 void MusicPlayer::onPlaylistChanged()
 {
-    // 播放列表添加歌曲不���响播放器播放音乐
+    // 播放列表添加歌曲不影响播放器播放音乐
     // 只有在播放列表为空时才停止播放
     if (m_player->state() != QMediaPlayer::StoppedState && m_playlist && m_playlist->count() == 0) {
         stop();
@@ -451,7 +452,7 @@ void MusicPlayer::stopDLNADiscovery()
     m_dlnaManager->stopDiscovery();
 }
 
-QList<DLNAManager::DLNADevice> MusicPlayer::getAvailableDLNADevices() const
+QList<DLNADevice> MusicPlayer::getAvailableDLNADevices() const
 {
     return m_dlnaManager->getAvailableDevices();
 }
@@ -461,39 +462,28 @@ bool MusicPlayer::connectToDLNADevice(const QString& deviceId)
     bool success = m_dlnaManager->connectToDevice(deviceId);
     if (success) {
         m_useDLNA = true;
-        // 如果当前正在播放，则通过DLNA继续播放
-        if (state() == QMediaPlayer::PlayingState && m_playlist && m_playlist->currentIndex() >= 0) {
-            MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
-            m_dlnaManager->playMedia(currentFile.fileUrl());
-        }
+        m_currentDLNADevice = deviceId;
+        m_dlnaConnected = true;
     }
     return success;
 }
 
 void MusicPlayer::disconnectFromDLNADevice()
 {
-    if (m_useDLNA) {
-        m_dlnaManager->stopMedia();
-        m_dlnaManager->disconnectFromDevice();
-        m_useDLNA = false;
-        
-        // 如果当前正在通过DLNA播放，则切换回本地播放
-        if (state() == QMediaPlayer::PlayingState && m_playlist && m_playlist->currentIndex() >= 0) {
-            MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
-            m_player->setMedia(QMediaContent(currentFile.fileUrl()));
-            m_player->play();
-        }
-    }
+    m_dlnaManager->disconnectFromDevice();
+    m_useDLNA = false;
+    m_currentDLNADevice.clear();
+    m_dlnaConnected = false;
 }
 
 bool MusicPlayer::isDLNAConnected() const
 {
-    return m_dlnaManager->isConnected();
+    return m_dlnaConnected;
 }
 
 QString MusicPlayer::getCurrentDLNADevice() const
 {
-    return m_dlnaManager->getCurrentDeviceId();
+    return m_currentDLNADevice;
 }
 
 void MusicPlayer::onDLNAPlaybackStateChanged(const QString& state)
