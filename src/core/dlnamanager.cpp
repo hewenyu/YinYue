@@ -377,13 +377,13 @@ void DLNAManager::fetchDeviceDescription(const QString& location)
 }
 
 // 从 m_devices 更新设备信息
-void DLNAManager::updateDeviceInfo(const QString& deviceId, const DLNADevice& device)
+void DLNAManager::updateDeviceInfo(const DLNADevice& device)
 {
-    if (m_devices.contains(deviceId)) {
-        DLNADevice& existingDevice = m_devices[deviceId];
+    if (m_devices.contains(device.id)) {
+        DLNADevice& existingDevice = m_devices[device.id];
         existingDevice.info = device.info;
         existingDevice.name = device.info.friendlyName;
-        qDebug() << "更新设备信息:" << deviceId << device.info.friendlyName;
+        qDebug() << "更新设备信息:" << existingDevice.id << existingDevice.info.friendlyName;
     }
 }
 
@@ -479,7 +479,7 @@ void DLNAManager::parseDeviceDescription(const QByteArray& data)
         
     }
     // updateDeviceInfo
-    updateDeviceInfo(device.id, device);
+    updateDeviceInfo(device);
 
     if (xml.hasError()) {
         qDebug() << "XML解析错误:" << xml.errorString();
