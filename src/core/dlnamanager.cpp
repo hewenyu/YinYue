@@ -35,7 +35,6 @@ DLNAManager::DLNAManager(QObject *parent)
     , m_ssdpSocket(new QUdpSocket(this))
     , m_networkManager(new QNetworkAccessManager(this))
     , m_discoveryTimer(new QTimer(this))
-    , m_timeoutTimer(new QTimer(this))
     , m_connected(false)
 {
     // 设置SSDP套接字
@@ -45,10 +44,6 @@ DLNAManager::DLNAManager(QObject *parent)
     // 设置发现定时器
     m_discoveryTimer->setInterval(DISCOVERY_INTERVAL);
     connect(m_discoveryTimer, &QTimer::timeout, this, &DLNAManager::sendSSDPDiscover);
-
-    // 设置超时检查定时器
-    m_timeoutTimer->setInterval(1000);  // 每秒检查一次
-    connect(m_timeoutTimer, &QTimer::timeout, this, &DLNAManager::checkDeviceTimeouts);
 }
 
 DLNAManager::~DLNAManager()
@@ -62,15 +57,13 @@ void DLNAManager::startDiscovery()
     clearDevices();
     sendSSDPDiscover();
     m_discoveryTimer->start();
-    m_timeoutTimer->start();
 }
 
 void DLNAManager::stopDiscovery()
 {
     qDebug() << "Stopping DLNA device discovery";
-    sendSSDPByebye();
     m_discoveryTimer->stop();
-    m_timeoutTimer->stop();
+    clearDevices();
 }
 
 QList<DLNADevice> DLNAManager::getAvailableDevices() const
@@ -90,7 +83,7 @@ QList<DLNADevice> DLNAManager::getAvailableDevices() const
 
 bool DLNAManager::connectToDevice(const QString& deviceId)
 {
-    qDebug() << "尝试连接设备:" << deviceId;
+    qDebug() << "\n尝试连接设备:" << deviceId;
     
     if (!m_devices.contains(deviceId)) {
         qDebug() << "设备未找到:" << deviceId;
@@ -117,26 +110,43 @@ bool DLNAManager::connectToDevice(const QString& deviceId)
         return false;
     }
     
-    // 设置当前设备ID
+    // 先设置连接状态
     m_currentDeviceId = deviceId;
+    m_connected = true;
     
     // 尝试发送一个简单的UPnP动作来测试连接
-    QMap<QString, QString> args;
-    args["InstanceID"] = "0";
+    int retryCount = 0;
+    const int maxRetries = 3;
+    bool success = false;
     
-    bool success = sendUPnPAction(UPnP_AVTransport, "GetTransportInfo", args);
+    while (retryCount < maxRetries && !success) {
+        if (retryCount > 0) {
+            qDebug() << "重试连接 (" << retryCount + 1 << "/" << maxRetries << ")";
+            QThread::msleep(1000); // 重试前等待1秒
+        }
+        
+        QMap<QString, QString> args;
+        args["InstanceID"] = "0";
+        success = sendUPnPAction(UPnP_AVTransport, "GetTransportInfo", args);
+        
+        if (!success) {
+            qDebug() << "连接测试失败，尝试重新连接...";
+            retryCount++;
+        }
+    }
     
     if (success) {
-        m_connected = true;
         emit connectionStateChanged(true);
         qDebug() << "设备连接成功:" << device.friendlyName;
         startPlaybackMonitoring();
         return true;
     }
     
+    // 如果所有重试都失败，恢复未连接状态
+    m_connected = false;
     m_currentDeviceId.clear();
     qDebug() << "设备连接失败:" << deviceId;
-    emit error(tr("Failed to connect to device"));
+    emit error(tr("Failed to connect to device after %1 attempts").arg(maxRetries));
     return false;
 }
 
@@ -260,12 +270,7 @@ void DLNAManager::parseDeviceDescription(const QByteArray& data, const QString& 
     }
 
     // 更新或添加设备
-    bool isNewDevice = !m_devices.contains(device.UDN);
-    m_devices[device.UDN] = device;
-    
-    if (isNewDevice) {
-        emit deviceDiscovered(device.UDN, device.friendlyName);
-    }
+    addDevice(device);
 }
 
 void DLNAManager::addDevice(const DLNADevice& device)
@@ -276,7 +281,19 @@ void DLNAManager::addDevice(const DLNADevice& device)
     m_devices[deviceId] = device;
     
     if (isNew) {
+        qDebug() << "\n处理DLNA设备发现:";
+        qDebug() << "  设备ID:" << deviceId;
+        qDebug() << "  设备名称:" << device.friendlyName;
         emit deviceDiscovered(deviceId, device.friendlyName);
+    }
+
+    // 打印当前设备列表
+    qDebug() << "\n更新DLNA设备列表:";
+    qDebug() << "当前设备数量:" << m_devices.size();
+    for (const auto& dev : m_devices) {
+        qDebug() << "  添加设备到列表:";
+        qDebug() << "    ID:" << dev.UDN;
+        qDebug() << "    名称:" << dev.friendlyName;
     }
 }
 
@@ -288,142 +305,26 @@ void DLNAManager::removeDevice(const QString& deviceId)
         }
         m_devices.remove(deviceId);
         emit deviceLost(deviceId);
-    }
-}
-
-void DLNAManager::checkDeviceTimeouts()
-{
-    qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
-    QList<QString> devicesToRemove;
-    
-    for (auto it = m_devices.begin(); it != m_devices.end(); ++it) {
-        if (currentTime - it.value().lastSeenTime > DEVICE_TIMEOUT) {
-            devicesToRemove.append(it.key());
+        
+        qDebug() << "\n更新DLNA设备列表:";
+        qDebug() << "当前设备数量:" << m_devices.size();
+        for (const auto& dev : m_devices) {
+            qDebug() << "  设备列表:";
+            qDebug() << "    ID:" << dev.UDN;
+            qDebug() << "    名称:" << dev.friendlyName;
         }
     }
-    
-    for (const QString& deviceId : devicesToRemove) {
-        removeDevice(deviceId);
-    }
-}
-
-QString DLNAManager::extractHeader(const QString& response, const QString& header)
-{
-    QStringList lines = response.split("\r\n");
-    QString headerPrefix = header + ":";
-    
-    for (const QString& line : lines) {
-        if (line.startsWith(headerPrefix, Qt::CaseInsensitive)) {
-            return line.mid(headerPrefix.length()).trimmed();
-        }
-    }
-    
-    return QString();
-}
-
-bool DLNAManager::sendUPnPAction(const QString& serviceType, const QString& action, 
-                                const QMap<QString, QString>& arguments)
-{
-    if (!m_connected || !m_devices.contains(m_currentDeviceId)) {
-        return false;
-    }
-
-    const DLNADevice& device = m_devices[m_currentDeviceId];
-    if (!device.hasService(serviceType)) {
-        return false;
-    }
-
-    DLNAService service = device.getService(serviceType);
-    QString controlUrl = device.getFullUrl(service.controlURL);
-    
-    // 构建SOAP请求
-    QString soapBody = QString(
-        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-        "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" "
-        "s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">\n"
-        "<s:Body>\n"
-        "<u:%1 xmlns:u=\"%2\">\n").arg(action, serviceType);
-    
-    for (auto it = arguments.begin(); it != arguments.end(); ++it) {
-        soapBody += QString("<%1>%2</%1>\n").arg(it.key(), it.value());
-    }
-    
-    soapBody += QString("</u:%1>\n"
-                       "</s:Body>\n"
-                       "</s:Envelope>\n").arg(action);
-
-    QNetworkRequest request(controlUrl);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "text/xml; charset=\"utf-8\"");
-    request.setRawHeader("SOAPAction", QString("\"%1#%2\"").arg(serviceType, action).toUtf8());
-
-    QNetworkReply* reply = m_networkManager->post(request, soapBody.toUtf8());
-    
-    // 等待响应
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
-
-    bool success = (reply->error() == QNetworkReply::NoError);
-    reply->deleteLater();
-    
-    return success;
-}
-
-// 媒体控制方法实现
-bool DLNAManager::playMedia(const QUrl& url)
-{
-    QMap<QString, QString> args;
-    args["InstanceID"] = "0";
-    args["CurrentURI"] = url.toString();
-    args["CurrentURIMetaData"] = "";
-    
-    if (sendUPnPAction(UPnP_AVTransport, "SetAVTransportURI", args)) {
-        args.clear();
-        args["InstanceID"] = "0";
-        args["Speed"] = "1";
-        return sendUPnPAction(UPnP_AVTransport, "Play", args);
-    }
-    return false;
-}
-
-bool DLNAManager::pauseMedia()
-{
-    QMap<QString, QString> args;
-    args["InstanceID"] = "0";
-    return sendUPnPAction(UPnP_AVTransport, "Pause", args);
-}
-
-bool DLNAManager::stopMedia()
-{
-    QMap<QString, QString> args;
-    args["InstanceID"] = "0";
-    return sendUPnPAction(UPnP_AVTransport, "Stop", args);
-}
-
-bool DLNAManager::setVolume(int volume)
-{
-    QMap<QString, QString> args;
-    args["InstanceID"] = "0";
-    args["Channel"] = "Master";
-    args["DesiredVolume"] = QString::number(volume);
-    return sendUPnPAction(UPnP_RenderingControl, "SetVolume", args);
-}
-
-bool DLNAManager::seekTo(qint64 position)
-{
-    QMap<QString, QString> args;
-    args["InstanceID"] = "0";
-    args["Unit"] = "REL_TIME";
-    args["Target"] = QString("%1:%2:%3")
-        .arg(position / 3600000)
-        .arg((position % 3600000) / 60000, 2, 10, QChar('0'))
-        .arg((position % 60000) / 1000, 2, 10, QChar('0'));
-    return sendUPnPAction(UPnP_AVTransport, "Seek", args);
 }
 
 void DLNAManager::clearDevices()
 {
+    qDebug() << "清空DLNA设备列表";
+    if (m_connected) {
+        disconnectFromDevice();
+    }
     m_devices.clear();
+    qDebug() << "\n更新DLNA设备列表:";
+    qDebug() << "当前设备数量:" << m_devices.size();
 }
 
 void DLNAManager::startPlaybackMonitoring()
@@ -466,38 +367,373 @@ void DLNAManager::checkPlaybackState()
 
 void DLNAManager::handleUPnPResponse(QNetworkReply* reply)
 {
+    if (!reply) {
+        qDebug() << "错误: 收到空的网络响应";
+        return;
+    }
+
     if (reply->error() != QNetworkReply::NoError) {
-        qDebug() << "UPnP response error:" << reply->errorString();
-        emit error(tr("Failed to communicate with device: %1").arg(reply->errorString()));
+        qDebug() << "\nUPnP响应错误:";
+        qDebug() << "  错误类型:" << reply->error();
+        qDebug() << "  错误描述:" << reply->errorString();
+        qDebug() << "  HTTP状态码:" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        qDebug() << "  请求URL:" << reply->url().toString();
+        
+        QByteArray errorData = reply->readAll();
+        if (!errorData.isEmpty()) {
+            qDebug() << "  错误响应内容:" << QString::fromUtf8(errorData);
+        }
+        
         reply->deleteLater();
         return;
     }
 
     QByteArray response = reply->readAll();
+    if (response.isEmpty()) {
+        qDebug() << "警告: 收到空的响应内容";
+        reply->deleteLater();
+        return;
+    }
+
     QString contentType = reply->header(QNetworkRequest::ContentTypeHeader).toString();
-    
+    qDebug() << "\nUPnP响应:";
+    qDebug() << "  内容类型:" << contentType;
+    qDebug() << "  响应内容:" << QString::fromUtf8(response);
+
     // 解析SOAP响应
-    if (contentType.contains("xml", Qt::CaseInsensitive)) {
+    if (contentType.contains("xml", Qt::CaseInsensitive) && response.contains("<?xml")) {
         QDomDocument doc;
-        if (doc.setContent(response)) {
-            QDomElement envelope = doc.documentElement();
-            QDomElement body = envelope.firstChildElement("s:Body");
-            if (!body.isNull()) {
-                // 解析响应状态
-                QDomElement fault = body.firstChildElement("s:Fault");
-                if (!fault.isNull()) {
-                    QString faultString = fault.firstChildElement("faultstring").text();
-                    emit error(tr("Device error: %1").arg(faultString));
+        QString errorMsg;
+        int errorLine = 0, errorColumn = 0;
+        
+        if (!doc.setContent(response, &errorMsg, &errorLine, &errorColumn)) {
+            qDebug() << "XML解析错误:";
+            qDebug() << "  错误信息:" << errorMsg;
+            qDebug() << "  错误位置:" << errorLine << "行" << errorColumn << "列";
+            reply->deleteLater();
+            return;
+        }
+
+        QDomElement envelope = doc.documentElement();
+        if (envelope.isNull()) {
+            qDebug() << "错误: XML根元素为空";
+            reply->deleteLater();
+            return;
+        }
+
+        QDomElement body = envelope.firstChildElement("s:Body");
+        if (body.isNull()) {
+            body = envelope.firstChildElement("Body");
+        }
+
+        if (!body.isNull()) {
+            // 检查是否有错误响应
+            QDomElement fault = body.firstChildElement("s:Fault");
+            if (fault.isNull()) {
+                fault = body.firstChildElement("Fault");
+            }
+
+            if (!fault.isNull()) {
+                QString faultString;
+                QDomElement faultStringElem = fault.firstChildElement("faultstring");
+                if (!faultStringElem.isNull()) {
+                    faultString = faultStringElem.text();
                 } else {
-                    // 处理成功响应
-                    QString state = body.firstChildElement("CurrentTransportState").text();
-                    if (!state.isEmpty()) {
-                        emit playbackStateChanged(state);
+                    faultString = fault.text();
+                }
+                qDebug() << "  SOAP错误:" << faultString;
+                emit error(tr("Device error: %1").arg(faultString));
+            } else {
+                // 处理成功响应
+                // 查找任何可能的响应元素
+                QDomElement responseElem = body.firstChildElement();
+                while (!responseElem.isNull()) {
+                    QString tagName = responseElem.tagName();
+                    if (tagName.contains("Response", Qt::CaseInsensitive)) {
+                        qDebug() << "  找到响应元素:" << tagName;
+                        // ��理所有子元素
+                        QDomElement child = responseElem.firstChildElement();
+                        while (!child.isNull()) {
+                            QString childName = child.tagName();
+                            QString childValue = child.text();
+                            qDebug() << "    " << childName << ":" << childValue;
+                            
+                            // 特别处理一些常见的状态
+                            if (childName == "CurrentTransportState") {
+                                emit playbackStateChanged(childValue);
+                            }
+                            child = child.nextSiblingElement();
+                        }
+                        break;
                     }
+                    responseElem = responseElem.nextSiblingElement();
                 }
             }
+        } else {
+            qDebug() << "警告: 未找到SOAP Body元素";
         }
+    } else {
+        qDebug() << "警告: 响应不是有效的XML格式";
     }
 
     reply->deleteLater();
+}
+
+QString DLNAManager::extractHeader(const QString& response, const QString& header)
+{
+    QStringList lines = response.split("\r\n");
+    QString headerPrefix = header + ":";
+    
+    for (const QString& line : lines) {
+        if (line.startsWith(headerPrefix, Qt::CaseInsensitive)) {
+            return line.mid(headerPrefix.length()).trimmed();
+        }
+    }
+    
+    return QString();
+}
+
+bool DLNAManager::sendUPnPAction(const QString& serviceType, const QString& action, 
+                                const QMap<QString, QString>& arguments)
+{
+    if (!m_connected || !m_devices.contains(m_currentDeviceId)) {
+        qDebug() << "发送UPnP动作失败: 设备未连接";
+        return false;
+    }
+
+    const DLNADevice& device = m_devices[m_currentDeviceId];
+    if (!device.hasService(serviceType)) {
+        qDebug() << "发送UPnP动作失败: 设备不支持服务" << serviceType;
+        return false;
+    }
+
+    DLNAService service = device.getService(serviceType);
+    QString controlUrl = device.getFullUrl(service.controlURL);
+    
+    qDebug() << "\n发送UPnP动作:";
+    qDebug() << "  动作:" << action;
+    qDebug() << "  服务:" << serviceType;
+    qDebug() << "  控制URL:" << controlUrl;
+    
+    // 构建SOAP请求
+    QString soapBody = QString(
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" "
+        "s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">\n"
+        "<s:Body>\n"
+        "<u:%1 xmlns:u=\"%2\">\n").arg(action, serviceType);
+    
+    for (auto it = arguments.begin(); it != arguments.end(); ++it) {
+        soapBody += QString("<%1>%2</%1>\n").arg(it.key(), it.value());
+        qDebug() << "  参数:" << it.key() << "=" << it.value();
+    }
+    
+    soapBody += QString("</u:%1>\n"
+                       "</s:Body>\n"
+                       "</s:Envelope>\n").arg(action);
+
+    QNetworkRequest request(controlUrl);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "text/xml; charset=\"utf-8\"");
+    request.setHeader(QNetworkRequest::UserAgentHeader, "YinYue/1.0");
+    request.setRawHeader("SOAPAction", QString("\"%1#%2\"").arg(serviceType, action).toUtf8());
+    request.setRawHeader("Connection", "close");
+    request.setRawHeader("Cache-Control", "no-cache");
+    request.setRawHeader("Pragma", "no-cache");
+    request.setRawHeader("Accept", "text/xml");
+    request.setRawHeader("Accept-Encoding", "identity");
+    request.setRawHeader("Content-Length", QByteArray::number(soapBody.toUtf8().length()));
+
+    qDebug() << "  请求头:";
+    qDebug() << "    Content-Type:" << request.header(QNetworkRequest::ContentTypeHeader).toString();
+    qDebug() << "    SOAPAction:" << request.rawHeader("SOAPAction");
+    qDebug() << "    Content-Length:" << request.rawHeader("Content-Length");
+    qDebug() << "  请求体:";
+    qDebug() << soapBody;
+
+    QNetworkReply* reply = m_networkManager->post(request, soapBody.toUtf8());
+    
+    // 等待响应
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    bool success = (reply->error() == QNetworkReply::NoError);
+    if (!success) {
+        qDebug() << "UPnP动作失败:";
+        qDebug() << "  错误:" << reply->errorString();
+        qDebug() << "  状态���:" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        QByteArray responseData = reply->readAll();
+        qDebug() << "  响应:" << QString::fromUtf8(responseData);
+        
+        // 尝试解析错误响应
+        if (responseData.contains("<?xml")) {
+            QDomDocument doc;
+            if (doc.setContent(responseData)) {
+                QDomElement fault = doc.documentElement().firstChildElement("s:Body").firstChildElement("s:Fault");
+                if (!fault.isNull()) {
+                    QString faultString = fault.firstChildElement("faultstring").text();
+                    qDebug() << "  SOAP错误:" << faultString;
+                }
+            }
+        }
+    } else {
+        qDebug() << "UPnP动作成功";
+        QByteArray responseData = reply->readAll();
+        qDebug() << "  响应:" << QString::fromUtf8(responseData);
+    }
+
+    reply->deleteLater();
+    return success;
+}
+
+// 媒体控制方法实现
+bool DLNAManager::playMedia(const QUrl& url)
+{
+    qDebug() << "\n尝试播放媒体:" << url.toString();
+    
+    if (!m_connected || !m_devices.contains(m_currentDeviceId)) {
+        qDebug() << "播放失败: 设备未连接";
+        emit error(tr("Device not connected"));
+        return false;
+    }
+
+    const DLNADevice& device = m_devices[m_currentDeviceId];
+    qDebug() << "当前设备:" << device.friendlyName;
+    
+    // 检查AVTransport服务
+    if (!device.hasService(UPnP_AVTransport)) {
+        qDebug() << "播放失败: 设备不支持AVTransport服务";
+        emit error(tr("Device does not support media playback"));
+        return false;
+    }
+
+    // 设置媒体URI
+    QMap<QString, QString> args;
+    args["InstanceID"] = "0";
+    args["CurrentURI"] = url.toString();
+    args["CurrentURIMetaData"] = "";
+    
+    qDebug() << "设置媒体URI:" << url.toString();
+    if (!sendUPnPAction(UPnP_AVTransport, "SetAVTransportURI", args)) {
+        qDebug() << "播放失败: 无法设置媒体URI";
+        emit error(tr("Failed to set media URI"));
+        return false;
+    }
+
+    // 等待一段时间让设备加载媒体
+    QThread::msleep(500);
+
+    // 发送播放请求到本地播放器
+    emit requestLocalPlay(url);
+
+    // 开始播放DLNA设备
+    args.clear();
+    args["InstanceID"] = "0";
+    args["Speed"] = "1";
+    
+    qDebug() << "开始播放";
+    if (!sendUPnPAction(UPnP_AVTransport, "Play", args)) {
+        qDebug() << "播放失败: 无法开始播放";
+        emit error(tr("Failed to start playback"));
+        return false;
+    }
+
+    qDebug() << "播放命令发送成功";
+    return true;
+}
+
+bool DLNAManager::pauseMedia()
+{
+    emit requestLocalPause();
+    
+    QMap<QString, QString> args;
+    args["InstanceID"] = "0";
+    return sendUPnPAction(UPnP_AVTransport, "Pause", args);
+}
+
+bool DLNAManager::stopMedia()
+{
+    emit requestLocalStop();
+    
+    QMap<QString, QString> args;
+    args["InstanceID"] = "0";
+    return sendUPnPAction(UPnP_AVTransport, "Stop", args);
+}
+
+bool DLNAManager::setVolume(int volume)
+{
+    emit requestLocalVolume(volume);
+    
+    QMap<QString, QString> args;
+    args["InstanceID"] = "0";
+    args["Channel"] = "Master";
+    args["DesiredVolume"] = QString::number(volume);
+    return sendUPnPAction(UPnP_RenderingControl, "SetVolume", args);
+}
+
+bool DLNAManager::seekTo(qint64 position)
+{
+    emit requestLocalSeek(position);
+    
+    QMap<QString, QString> args;
+    args["InstanceID"] = "0";
+    args["Unit"] = "REL_TIME";
+    args["Target"] = QString("%1:%2:%3")
+        .arg(position / 3600000)
+        .arg((position % 3600000) / 60000, 2, 10, QChar('0'))
+        .arg((position % 60000) / 1000, 2, 10, QChar('0'));
+    return sendUPnPAction(UPnP_AVTransport, "Seek", args);
+}
+
+void DLNAManager::checkDeviceTimeouts()
+{
+    // 不再使用超时检查逻辑
+}
+
+void DLNAManager::onLocalPlaybackStateChanged(const QString& state)
+{
+    m_localPlaybackState = state;
+    
+    if (m_connected) {
+        // 同步本地播放状态到DLNA设备
+        if (state == "Playing") {
+            QMap<QString, QString> args;
+            args["InstanceID"] = "0";
+            args["Speed"] = "1";
+            sendUPnPAction(UPnP_AVTransport, "Play", args);
+        } else if (state == "Paused") {
+            QMap<QString, QString> args;
+            args["InstanceID"] = "0";
+            sendUPnPAction(UPnP_AVTransport, "Pause", args);
+        } else if (state == "Stopped") {
+            QMap<QString, QString> args;
+            args["InstanceID"] = "0";
+            sendUPnPAction(UPnP_AVTransport, "Stop", args);
+        }
+    }
+}
+
+void DLNAManager::onLocalPositionChanged(qint64 position)
+{
+    m_localPosition = position;
+    
+    if (m_connected) {
+        // 同步播放位置到DLNA设备
+        seekTo(position);
+    }
+}
+
+void DLNAManager::onLocalDurationChanged(qint64 duration)
+{
+    m_localDuration = duration;
+}
+
+void DLNAManager::onLocalVolumeChanged(int volume)
+{
+    m_localVolume = volume;
+    
+    if (m_connected) {
+        // 同步音量到DLNA设备
+        setVolume(volume);
+    }
 } 

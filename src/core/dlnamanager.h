@@ -43,6 +43,17 @@ signals:
     void connectionStateChanged(bool connected);
     void playbackStateChanged(const QString& state);
     void error(const QString& message);
+    void requestLocalPlay(const QUrl& url);
+    void requestLocalPause();
+    void requestLocalStop();
+    void requestLocalSeek(qint64 position);
+    void requestLocalVolume(int volume);
+
+public slots:
+    void onLocalPlaybackStateChanged(const QString& state);
+    void onLocalPositionChanged(qint64 position);
+    void onLocalDurationChanged(qint64 duration);
+    void onLocalVolumeChanged(int volume);
 
 private slots:
     void handleSSDPResponse();
@@ -83,6 +94,10 @@ private:
     QString m_currentDeviceId;
     bool m_connected;
     QString m_currentPlaybackState;
+    QString m_localPlaybackState;
+    qint64 m_localPosition;
+    qint64 m_localDuration;
+    int m_localVolume;
 
     void clearDevices();
     bool sendUPnPAction(const QString& serviceType, const QString& action, const QMap<QString, QString>& arguments);
