@@ -2,92 +2,97 @@
 #define MUSICPLAYER_H
 
 #include <QObject>
-#include <QMediaPlayer>
 #include <QUrl>
-#include <QMediaContent>
-#include <QEventLoop>
+#include "localplayer.h"
+#include "dlnamanager.h"
 #include "models/playlist.h"
-#include "models/dlnadevice.h"
-#include "core/dlnamanager.h"
 
 class MusicPlayer : public QObject
 {
     Q_OBJECT
+
 public:
     explicit MusicPlayer(QObject *parent = nullptr);
     ~MusicPlayer();
 
-    // DLNA 相关功能
-    void startDLNADiscovery();
-    void stopDLNADiscovery();
-    QList<DLNADevice> getAvailableDLNADevices() const;
-    bool connectToDLNADevice(const QString& deviceId);
-    void disconnectFromDLNADevice();
-    bool isDLNAConnected() const;
-    QString getCurrentDLNADevice() const;
-
-    // 基本控制函数
-    void play();
+    // 播放控制
+    void play(const QUrl& url);
+    void play();  // 播放当前曲目
     void pause();
     void stop();
     void next();
     void previous();
     void setVolume(int volume);
-    void setPosition(qint64 position);
-    void setSource(const QUrl &source);
-    void setPlaylist(Playlist *playlist) { m_playlist = playlist; }
-    
-    // 播放模式控制
-    Playlist::PlayMode playMode() const;
+    void seekTo(qint64 position);
+
+    // 播放列表控制
+    void setPlaylist(Playlist* playlist);
+    Playlist* playlist() const { return m_playlist; }
     void setPlayMode(Playlist::PlayMode mode);
-    void togglePlayMode();
+    Playlist::PlayMode playMode() const;
 
-    // 获取状态
-    QMediaPlayer::State state() const;
-    qint64 position() const;
-    qint64 duration() const;
-    int volume() const;
+    // DLNA设备管理
+    void startDeviceDiscovery();
+    void stopDeviceDiscovery();
+    QList<DLNADevice> getAvailableDevices() const;
+    bool connectToDevice(const QString& deviceId);
+    void disconnectFromDevice();
+    bool isDeviceConnected() const;
+    QString getCurrentDeviceId() const;
 
-public slots:
-    void onPlaylistChanged();
-
-private slots:
-    void onMediaStatusChanged(QMediaPlayer::MediaStatus status);
-    void onStateChanged(QMediaPlayer::State state);
-    void onDLNAPlaybackStateChanged(const QString& state);
+    // 播放状态
+    QString getPlaybackState() const;
+    qint64 getPosition() const;
+    qint64 getDuration() const;
+    int getVolume() const;
 
 signals:
-    void stateChanged(QMediaPlayer::State state);
+    // 设备相关信号
+    void deviceDiscovered(const QString& deviceId, const QString& deviceName);
+    void deviceLost(const QString& deviceId);
+    void deviceConnectionChanged(bool connected);
+
+    // 播放状态信号
+    void playbackStateChanged(const QString& state);
     void positionChanged(qint64 position);
     void durationChanged(qint64 duration);
     void volumeChanged(int volume);
-    void mediaStatusChanged(QMediaPlayer::MediaStatus status);
-    void playModeChanged(Playlist::PlayMode mode);
-    void errorOccurred(const QString &error);
+    void error(const QString& message);
+
+    // 播放列表相关信号
     void currentSongChanged(int index);
-    
-    // DLNA 相关信号
-    void dlnaDeviceDiscovered(const QString& deviceId, const QString& deviceName);
-    void dlnaDeviceLost(const QString& deviceId);
-    void dlnaConnectionStateChanged(bool connected);
-    void dlnaError(const QString& error);
+    void playModeChanged(Playlist::PlayMode mode);
+
+private slots:
+    // 本地播放器状态处理
+    void handleLocalPlaybackStateChanged(const QString& state);
+    void handleLocalPositionChanged(qint64 position);
+    void handleLocalDurationChanged(qint64 duration);
+    void handleLocalVolumeChanged(int volume);
+    void handleLocalError(const QString& message);
+
+    // DLNA设备状态处理
+    void handleDeviceDiscovered(const QString& deviceId, const QString& deviceName);
+    void handleDeviceLost(const QString& deviceId);
+    void handleDeviceConnectionChanged(bool connected);
+    void handleDevicePlaybackStateChanged(const QString& state);
+    void handleDeviceError(const QString& message);
+
+    // 播放列表处理
+    void handlePlaylistChanged();
 
 private:
-    // 辅助函数：等待媒体加载或状态变化
-    bool waitForMediaLoaded(int timeout = 5000);
-    bool waitForState(QMediaPlayer::State targetState, int timeout = 5000);
-    bool switchToTrack(int index, const QString& operation);
+    void playCurrentTrack();
+    void playTrack(int index);
 
-    QMediaPlayer *m_player;
-    Playlist *m_playlist;
-    QEventLoop *m_eventLoop;
-    
-    // DLNA 相关私有成员
+    LocalPlayer* m_localPlayer;
     DLNAManager* m_dlnaManager;
-    bool m_useDLNA;
-    QString m_currentDLNADevice;
-    QList<DLNADevice> m_availableDLNADevices;
-    bool m_dlnaConnected;
+    Playlist* m_playlist;
+    QString m_currentPlaybackState;
+    qint64 m_currentPosition;
+    qint64 m_currentDuration;
+    int m_currentVolume;
+    bool m_isDeviceConnected;
 };
 
 #endif // MUSICPLAYER_H 

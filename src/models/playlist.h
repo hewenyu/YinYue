@@ -3,12 +3,13 @@
 
 #include <QObject>
 #include <QList>
-#include <QString>
+#include <QAbstractListModel>
 #include "musicfile.h"
 
-class Playlist : public QObject
+class Playlist : public QAbstractListModel
 {
     Q_OBJECT
+
 public:
     enum PlayMode {
         Sequential,  // 顺序播放
@@ -16,39 +17,37 @@ public:
         RepeatOne,  // 单曲循环
         RepeatAll   // 列表循环
     };
+    Q_ENUM(PlayMode)
 
     explicit Playlist(QObject *parent = nullptr);
-    explicit Playlist(const QString &name, QObject *parent = nullptr);
+    ~Playlist();
 
-    // 基本操作
+    // QAbstractListModel接口
+    int rowCount(const QModelIndex &parent = QModelIndex()) const override;
+    QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+
+    // 播放列表操作
     void addFile(const MusicFile &file);
     void removeFile(int index);
     void clear();
-    
+    MusicFile at(int index) const;
+    int count() const;
+
     // 播放控制
-    int nextIndex() const;
-    int previousIndex() const;
     int currentIndex() const;
     void setCurrentIndex(int index);
-    
+    int nextIndex() const;
+    int previousIndex() const;
+
     // 播放模式
     PlayMode playMode() const;
     void setPlayMode(PlayMode mode);
-    
-    // 获取信息
-    QString name() const;
-    void setName(const QString &name);
-    int count() const;
-    MusicFile at(int index) const;
-    QList<MusicFile> files() const;
 
 signals:
     void currentIndexChanged(int index);
     void playModeChanged(PlayMode mode);
-    void playlistChanged();
 
 private:
-    QString m_name;
     QList<MusicFile> m_files;
     int m_currentIndex;
     PlayMode m_playMode;
