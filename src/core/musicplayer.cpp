@@ -63,12 +63,40 @@ MusicPlayer::~MusicPlayer()
 // 播放控制方法
 void MusicPlayer::play(const QUrl& url)
 {
-    qDebug() << "\n开始播放:" << url.toString();
-    
-    if (m_isDeviceConnected) {
-        m_dlnaManager->playMedia(url);
-    } else {
-        m_localPlayer->play(url);
+    try {
+        qDebug() << "\n开始播放:" << url.toString();
+        qDebug() << "设备连接状态:" << (m_isDeviceConnected ? "已连接" : "未连接");
+        
+        if (!url.isValid()) {
+            qDebug() << "错误: 无效的URL";
+            emit error(tr("Invalid URL: %1").arg(url.toString()));
+            return;
+        }
+        
+        if (m_isDeviceConnected) {
+            if (!m_dlnaManager) {
+                qDebug() << "错误: DLNA管理器未初始化";
+                emit error(tr("DLNA manager not initialized"));
+                return;
+            }
+            qDebug() << "尝试通过DLNA播放...";
+            qDebug() << "当前DLNA设备ID:" << m_dlnaManager->getCurrentDeviceId();
+            m_dlnaManager->playMedia(url);
+        } else {
+            if (!m_localPlayer) {
+                qDebug() << "错误: 本地播放器未初始化";
+                emit error(tr("Local player not initialized"));
+                return;
+            }
+            qDebug() << "使用本地播放器播放";
+            m_localPlayer->play(url);
+        }
+    } catch (const std::exception& e) {
+        qDebug() << "播放过程中发生异常:" << e.what();
+        emit error(tr("Playback error: %1").arg(e.what()));
+    } catch (...) {
+        qDebug() << "播放过程中发生未知异常";
+        emit error(tr("Unknown playback error"));
     }
 }
 
@@ -137,17 +165,48 @@ QList<DLNADevice> MusicPlayer::getAvailableDevices() const
 
 bool MusicPlayer::connectToDevice(const QString& deviceId)
 {
-    bool success = m_dlnaManager->connectToDevice(deviceId);
-    if (success) {
-        m_isDeviceConnected = true;
+    try {
+        qDebug() << "\n尝试连接DLNA设备:" << deviceId;
+        if (!m_dlnaManager) {
+            qDebug() << "错误: DLNA管理器未初始化";
+            emit error(tr("DLNA manager not initialized"));
+            return false;
+        }
+        
+        if (deviceId.isEmpty()) {
+            qDebug() << "错误: 设备ID为空";
+            emit error(tr("Empty device ID"));
+            return false;
+        }
+
+        bool success = m_dlnaManager->connectToDevice(deviceId);
+        qDebug() << "连接" << (success ? "成功" : "失败");
+        if (success) {
+            m_isDeviceConnected = true;
+            qDebug() << "设备连接状态已更新为已连接";
+        } else {
+            qDebug() << "错误: 连接设备失败";
+            emit error(tr("Failed to connect to device: %1").arg(deviceId));
+        }
+        return success;
+    } catch (const std::exception& e) {
+        qDebug() << "连接设备过程中发生异常:" << e.what();
+        emit error(tr("Connection error: %1").arg(e.what()));
+        return false;
+    } catch (...) {
+        qDebug() << "连接设备过程中发生未知异常";
+        emit error(tr("Unknown connection error"));
+        return false;
     }
-    return success;
 }
 
 void MusicPlayer::disconnectFromDevice()
 {
+    qDebug() << "\n断开DLNA设备连接";
+    qDebug() << "当前设备ID:" << m_dlnaManager->getCurrentDeviceId();
     m_dlnaManager->disconnectFromDevice();
     m_isDeviceConnected = false;
+    qDebug() << "设备连接状态已更新为未连接";
 }
 
 bool MusicPlayer::isDeviceConnected() const
@@ -192,11 +251,11 @@ void MusicPlayer::handleLocalPlaybackStateChanged(const QString& state)
             m_currentPlaybackState = state;
             emit playbackStateChanged(state);
 
-            // 只在真正停止播放时（不是暂停）且不是手动停止时，才自动播放下一首
+            // 只在真正停止播放时（不是��停）且不是手动停止时，才自动播放下一首
             if (state == "Stopped" && m_playlist && m_playlist->currentIndex() != -1) {
                 if (!m_isManualStop) {
                     if (!m_isProcessingNextTrack) {
-                        // 检查当前播放时长，只有当播放时长超过1秒时才认为是正常播放结束
+                        // 检查当前播放时长，只有当播放时长超过1时才认为是正常播放结束
                         if (m_currentPosition > 1000) {
                             m_isProcessingNextTrack = true;
                             unlockState();  // 在开始处理下一首歌之前释放锁
@@ -307,22 +366,31 @@ void MusicPlayer::handleLocalError(const QString& message)
 // DLNA设备状态处理
 void MusicPlayer::handleDeviceDiscovered(const QString& deviceId, const QString& deviceName)
 {
+    qDebug() << "\n发现DLNA设备:" << deviceName;
+    qDebug() << "设备ID:" << deviceId;
     emit deviceDiscovered(deviceId, deviceName);
 }
 
 void MusicPlayer::handleDeviceLost(const QString& deviceId)
 {
+    qDebug() << "\nDLNA设备丢失:" << deviceId;
     emit deviceLost(deviceId);
 }
 
 void MusicPlayer::handleDeviceConnectionChanged(bool connected)
 {
+    qDebug() << "\nDLNA设备连接状态变化:";
+    qDebug() << "设备ID:" << m_dlnaManager->getCurrentDeviceId();
+    qDebug() << "新状态:" << (connected ? "已连接" : "已断开");
     m_isDeviceConnected = connected;
     emit deviceConnectionChanged(connected);
 }
 
 void MusicPlayer::handleDevicePlaybackStateChanged(const QString& state)
 {
+    qDebug() << "\nDLNA设备播放状态变化:";
+    qDebug() << "设备ID:" << m_dlnaManager->getCurrentDeviceId();
+    qDebug() << "新状态:" << state;
     if (m_isDeviceConnected) {
         lockState();
         m_currentPlaybackState = state;
@@ -333,7 +401,12 @@ void MusicPlayer::handleDevicePlaybackStateChanged(const QString& state)
 
 void MusicPlayer::handleDeviceError(const QString& message)
 {
+    qDebug() << "\nDLNA设备错误:";
+    qDebug() << "设备ID:" << m_dlnaManager->getCurrentDeviceId();
+    qDebug() << "错误信息:" << message;
     if (m_isDeviceConnected) {
+        // 如果是严重错误，考虑切换回本地播放
+        qDebug() << "检查是否需要切换回本地播放...";
         emit error(tr("DLNA device error: %1").arg(message));
     }
 }
@@ -341,7 +414,7 @@ void MusicPlayer::handleDeviceError(const QString& message)
 void MusicPlayer::play()
 {
     if (!m_playlist || m_playlist->count() == 0) {
-        qDebug() << "无法播放：播放列表为空";
+        qDebug() << "无法播放：播放列表��空";
         return;
     }
 
@@ -427,22 +500,71 @@ void MusicPlayer::handlePlaylistChanged()
 
 void MusicPlayer::playCurrentTrack()
 {
-    if (!m_playlist || m_playlist->currentIndex() == -1) {
-        return;
-    }
+    try {
+        if (!m_playlist) {
+            qDebug() << "错误: 播放列表未初始化";
+            emit error(tr("Playlist not initialized"));
+            return;
+        }
 
-    MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
-    qDebug() << "播放当前歌曲:" << currentFile.filePath();
-    
-    // 使用QTimer延迟播放，避免状态冲突
-    QTimer::singleShot(500, this, [this, currentFile]() {
-        lockState();
-        m_currentPosition = 0;  // 重置播放位置
-        m_isProcessingNextTrack = false;  // 重置处理标志
-        unlockState();
-        play(currentFile.fileUrl());
-        emit currentSongChanged(m_playlist->currentIndex());
-    });
+        if (m_playlist->currentIndex() == -1) {
+            qDebug() << "错误: 无效的播放列表索引";
+            emit error(tr("Invalid playlist index"));
+            return;
+        }
+
+        MusicFile currentFile = m_playlist->at(m_playlist->currentIndex());
+        if (currentFile.filePath().isEmpty()) {
+            qDebug() << "错误: 无效的文件路径";
+            emit error(tr("Invalid file path"));
+            return;
+        }
+
+        qDebug() << "\n准备播放当前歌曲:";
+        qDebug() << "文件路径:" << currentFile.filePath();
+        qDebug() << "设备连接状态:" << (m_isDeviceConnected ? "已连接" : "未连接");
+        if (m_isDeviceConnected) {
+            if (!m_dlnaManager) {
+                qDebug() << "错误: DLNA管理器未初始化";
+                emit error(tr("DLNA manager not initialized"));
+                return;
+            }
+            qDebug() << "当前DLNA设备:" << m_dlnaManager->getCurrentDeviceId();
+        }
+        
+        // 使用QTimer延迟播放，避免状态冲突
+        QTimer::singleShot(500, this, [this, currentFile]() {
+            try {
+                lockState();
+                m_currentPosition = 0;  // 重置播放位置
+                m_isProcessingNextTrack = false;  // 重置处理标志
+                unlockState();
+                
+                QUrl fileUrl = currentFile.fileUrl();
+                if (!fileUrl.isValid()) {
+                    qDebug() << "错误: 无效的文件URL";
+                    emit error(tr("Invalid file URL"));
+                    return;
+                }
+                
+                qDebug() << "开始播放文件:" << fileUrl.toString();
+                play(fileUrl);
+                emit currentSongChanged(m_playlist->currentIndex());
+            } catch (const std::exception& e) {
+                qDebug() << "播放过程中发生异常:" << e.what();
+                emit error(tr("Playback error: %1").arg(e.what()));
+            } catch (...) {
+                qDebug() << "播放过程中发生未知异常";
+                emit error(tr("Unknown playback error"));
+            }
+        });
+    } catch (const std::exception& e) {
+        qDebug() << "准备播放过程中发生异常:" << e.what();
+        emit error(tr("Playback preparation error: %1").arg(e.what()));
+    } catch (...) {
+        qDebug() << "准备播放过程中发生未知异常";
+        emit error(tr("Unknown playback preparation error"));
+    }
 }
 
 void MusicPlayer::playTrack(int index)
