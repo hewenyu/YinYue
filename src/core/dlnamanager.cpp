@@ -259,6 +259,8 @@ void DLNAManager::sendSSDPByebye()
         "NTS: ssdp:byebye\r\n"
         "USN: " + DLNAManager::UPnP_MediaRenderer.toUtf8() + "\r\n"
         "\r\n";
+    qDebug() << "发送 SSDP 再见请求 (MediaRenderer):" << QString::fromUtf8(ssdpRequest);
+    m_ssdpSocket->writeDatagram(ssdpRequest, SSDP_MULTICAST_ADDR, SSDP_PORT);   // 发送byebye消息
 }
 
 // 处理SSDP响应
