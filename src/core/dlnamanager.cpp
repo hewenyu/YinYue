@@ -462,4 +462,42 @@ void DLNAManager::checkPlaybackState()
             emit playbackStateChanged(currentState);
         }
     }
+}
+
+void DLNAManager::handleUPnPResponse(QNetworkReply* reply)
+{
+    if (reply->error() != QNetworkReply::NoError) {
+        qDebug() << "UPnP response error:" << reply->errorString();
+        emit error(tr("Failed to communicate with device: %1").arg(reply->errorString()));
+        reply->deleteLater();
+        return;
+    }
+
+    QByteArray response = reply->readAll();
+    QString contentType = reply->header(QNetworkRequest::ContentTypeHeader).toString();
+    
+    // 解析SOAP响应
+    if (contentType.contains("xml", Qt::CaseInsensitive)) {
+        QDomDocument doc;
+        if (doc.setContent(response)) {
+            QDomElement envelope = doc.documentElement();
+            QDomElement body = envelope.firstChildElement("s:Body");
+            if (!body.isNull()) {
+                // 解析响应状态
+                QDomElement fault = body.firstChildElement("s:Fault");
+                if (!fault.isNull()) {
+                    QString faultString = fault.firstChildElement("faultstring").text();
+                    emit error(tr("Device error: %1").arg(faultString));
+                } else {
+                    // 处理成功响应
+                    QString state = body.firstChildElement("CurrentTransportState").text();
+                    if (!state.isEmpty()) {
+                        emit playbackStateChanged(state);
+                    }
+                }
+            }
+        }
+    }
+
+    reply->deleteLater();
 } 

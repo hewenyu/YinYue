@@ -8,7 +8,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt5 COMPONENTS Core Gui Widgets Multimedia Network Test Xml REQUIRED)
+find_package(Qt5 COMPONENTS Core Gui Widgets Multimedia Network Xml REQUIRED)
 
 # 设置包含目录
 include_directories(${CMAKE_SOURCE_DIR}/src)
@@ -46,59 +46,3 @@ target_link_libraries(${PROJECT_NAME}
     Qt5::Network
     Qt5::Xml
 )
-
-# 添加测试
-enable_testing()
-
-# MusicFile 测试
-add_executable(musicfile_test
-    tests/musicfile_test.cpp
-    src/models/musicfile.cpp
-)
-target_link_libraries(musicfile_test
-    Qt5::Core
-    Qt5::Test
-    Qt5::Multimedia
-)
-target_include_directories(musicfile_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-add_test(NAME musicfile_test COMMAND musicfile_test)
-
-# MusicPlayer 测试
-add_executable(musicplayer_test
-    tests/musicplayer_test.cpp
-    src/core/musicplayer.cpp
-    src/core/dlnamanager.cpp
-    src/models/playlist.cpp
-    src/models/musicfile.cpp
-    src/models/lyric.cpp
-    src/models/dlnadevice.cpp
-)
-target_link_libraries(musicplayer_test
-    Qt5::Core
-    Qt5::Test
-    Qt5::Multimedia
-    Qt5::Network
-    Qt5::Xml
-)
-target_include_directories(musicplayer_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-add_test(NAME musicplayer_test COMMAND musicplayer_test)
-
-# DLNA 测试
-add_executable(dlna_test
-    tests/dlna_test.cpp
-    src/core/dlnamanager.cpp
-    src/core/musicplayer.cpp
-    src/models/playlist.cpp
-    src/models/musicfile.cpp
-    src/models/lyric.cpp
-    src/models/dlnadevice.cpp
-)
-target_link_libraries(dlna_test
-    Qt5::Core
-    Qt5::Test
-    Qt5::Multimedia
-    Qt5::Network
-    Qt5::Xml
-)
-target_include_directories(dlna_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-add_test(NAME dlna_test COMMAND dlna_test)
