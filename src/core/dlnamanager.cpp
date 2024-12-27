@@ -60,15 +60,35 @@ DLNAManager::~DLNAManager()
 void DLNAManager::startDiscovery()
 {
     qDebug() << "Starting DLNA device discovery";
-    // 模拟发现设备
-    QTimer::singleShot(1000, this, [this]() {
-        emit deviceDiscovered("device1", "Test DLNA Device");
-    });
+    
+    // 清除现有设备列表
+    d->devices.clear();
+    
+    // 创建测试设备
+    DLNADevice testDevice;
+    testDevice.setId("test_device_1");
+    testDevice.setName("Test DLNA Device");
+    testDevice.setDeviceType(UPnP_MediaRenderer);
+    testDevice.setAddress(QHostAddress::LocalHost);
+    testDevice.setPort(8000);
+    
+    // 添加测试设备到列表
+    d->devices.append(testDevice);
+    
+    // 发出设备发现信号
+    emit deviceDiscovered(testDevice.id(), testDevice.name());
+    
+    qDebug() << "Test device discovered:" << testDevice.name() 
+             << "ID:" << testDevice.id()
+             << "Type:" << testDevice.deviceType()
+             << "Address:" << testDevice.address().toString()
+             << "Port:" << testDevice.port();
 }
 
 void DLNAManager::stopDiscovery()
 {
     qDebug() << "Stopping DLNA device discovery";
+    // 在这里可以添加清理代码
 }
 
 QList<DLNADevice> DLNAManager::getAvailableDevices() const
@@ -78,9 +98,31 @@ QList<DLNADevice> DLNAManager::getAvailableDevices() const
 
 bool DLNAManager::connectToDevice(const QString& deviceId)
 {
+    qDebug() << "Attempting to connect to device:" << deviceId;
+    
     lockDevice();
     if (m_isConnected) {
         disconnectFromDevice();
+    }
+
+    // 查找设备
+    bool found = false;
+    for (const auto& device : d->devices) {
+        if (device.id() == deviceId) {
+            found = true;
+            qDebug() << "Found device:" << device.name() 
+                     << "Type:" << device.deviceType()
+                     << "Address:" << device.address().toString()
+                     << "Port:" << device.port();
+            break;
+        }
+    }
+
+    if (!found) {
+        unlockDevice();
+        qDebug() << "Device not found:" << deviceId;
+        emit error("Device not found");
+        return false;
     }
 
     qDebug() << "Connecting to DLNA device:" << deviceId;
@@ -90,17 +132,21 @@ bool DLNAManager::connectToDevice(const QString& deviceId)
     unlockDevice();
 
     emit connectionStateChanged(true);
+    qDebug() << "Successfully connected to device:" << deviceId;
     return true;
 }
 
 void DLNAManager::disconnectFromDevice()
 {
+    qDebug() << "Disconnecting from device:" << m_currentDeviceId;
     lockDevice();
     if (m_isConnected) {
         stopPlaybackMonitoring();
+        stopMedia();
         m_currentDeviceId.clear();
         m_isConnected = false;
         emit connectionStateChanged(false);
+        qDebug() << "Device disconnected";
     }
     unlockDevice();
 }
