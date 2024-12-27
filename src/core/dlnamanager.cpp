@@ -402,15 +402,47 @@ void DLNAManager::parseDeviceDescription(const QByteArray& data)
     while (!xml.atEnd() && !xml.hasError()) {
         QXmlStreamReader::TokenType token = xml.readNext();
 
-       // 根据结构体填充信息
-       // 解析xml 写入DLNADeviceInfo
-       if (token == QXmlStreamReader::StartElement && xml.name() == "device") {
-            device.id = xml.attributes().value("UDN").toString();
-       }
-       if (token == QXmlStreamReader::StartElement && xml.name() == "friendlyName") {
-            device.name = xml.readElementText();
-       }
-       if (token == QXmlStreamReader::StartElement && xml.name() == "serviceList") {
+        // 解析xml, 所有都要去除前后空格
+        // 没有device就直接跳过这个循环 
+        if (token == QXmlStreamReader::StartElement && xml.name() == "device") {
+            device.id = xml.attributes().value("UDN").toString().simplified();
+        }else{
+            continue;
+        }
+        
+
+        if (token == QXmlStreamReader::StartElement && xml.name() == "friendlyName") {
+            device.name = xml.readElementText().simplified();
+        }
+        if (token == QXmlStreamReader::StartElement && xml.name() == "deviceType") {
+            device.type = xml.readElementText().simplified();
+        }
+        if (token == QXmlStreamReader::StartElement && xml.name() == "manufacturer") {
+            info.manufacturer = xml.readElementText().simplified();
+        }
+        if (token == QXmlStreamReader::StartElement && xml.name() == "modelDescription") {
+            info.modelDescription = xml.readElementText().simplified();
+        }
+        if (token == QXmlStreamReader::StartElement && xml.name() == "modelName") {
+            info.modelName = xml.readElementText().simplified();
+        }
+        if (token == QXmlStreamReader::StartElement && xml.name() == "modelNumber") {
+            info.modelNumber = xml.readElementText().simplified();
+        }
+        if (token == QXmlStreamReader::StartElement && xml.name() == "modelUrl") {
+            info.modelUrl = xml.readElementText().simplified();
+        }
+        if (token == QXmlStreamReader::StartElement && xml.name() == "presentationUrl") {
+            info.presentationUrl = xml.readElementText().simplified();
+        }
+        if (token == QXmlStreamReader::StartElement && xml.name() == "udn") {
+            info.udn = xml.readElementText().simplified();
+        }
+        if (token == QXmlStreamReader::StartElement && xml.name() == "upc") {
+            info.upc = xml.readElementText().simplified();
+        }
+
+        if (token == QXmlStreamReader::StartElement && xml.name() == "serviceList") {
             // 遍历services ,serviceList append 到serviceList
             // serviceId : 必有字段。服务表示符，是服务实例的唯一标识。
             // serviceType : 必有字段UPnP服务类型。格式定义与deviceType类此。详看文章开头表格。
@@ -420,23 +452,19 @@ void DLNAManager::parseDeviceDescription(const QByteArray& data)
             while (xml.readNextStartElement()) {
                 if (xml.name() == "service") {
                     DLNAService service;
-                    if (xml.name() == "serviceType" || xml.name() == "serviceId" || xml.name() == "SCPDURL" || 
-                        xml.name() == "controlURL" || xml.name() == "eventSubURL") {
-                        service.serviceType = xml.readElementText().simplified();
-                        service.serviceId = xml.readElementText().simplified();
-                        service.scpdUrl = xml.readElementText().simplified();
-                        service.controlUrl = xml.readElementText().simplified();
-                        service.eventSubUrl = xml.readElementText().simplified();
-                        serviceList.append(service);
-                    } else {
-                        xml.skipCurrentElement();
-                    }
+                    service.serviceType = xml.attributes().value("serviceType").toString().simplified();
+                    service.serviceId = xml.attributes().value("serviceId").toString().simplified();
+                    service.scpdUrl = xml.attributes().value("SCPDURL").toString().simplified();
+                    service.controlUrl = xml.attributes().value("controlURL").toString().simplified();
+                    service.eventSubUrl = xml.attributes().value("eventSubURL").toString().simplified();
+                    serviceList.append(service);
                 } else {
                     xml.skipCurrentElement();
                 }
             }
-       }
-       // 释放临时参数
+            info.services = serviceList;
+        }
+        device.info = info;
 
     }
     
